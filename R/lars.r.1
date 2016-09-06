@@ -1,0 +1,149 @@
+#!/usr/bin/R --vanilla -q --slave -f
+
+# this file is a demo of how lars works for variable selection
+# in multivariate models
+use <- paste(
+        "lars.r -nvar n -in inFile -rmColumns col1,col2,... -responseTag tag\n",
+        "-nvar...number of linear coeficients; default=nCovariates/2\n",
+        "-rmColumns remove columns with given headers\n",
+        "-in.....Name of tab separated file,\n",
+        "        the first row contains column tags (header)\n",
+        "        the column with responseTag header contains response values\n",
+        "        All other columns are treaded as descriptors\n",
+        "-responseTagheader of column containing res[ponse varable\n",
+        "\n")
+
+###################################################################
+# execution on windows with R 2.6
+# c:\Programs\R\R-2.6.0\bin\R.exe --vanilla -q --slave -f lars.r \
+#                                 --args -nvar 5 -in diabetes.tab -responseTag y
+#
+# execution on linux with R 2.2
+# R --vanilla -q --slave --args -nvar 5 -in diabetes.tab -responseTag y \
+#   < lars.r
+
+exit<-function(status, msg="")
+{  if(msg != "") cat(msg,"\n")
+   if(status != 0) cat(use)
+   quit(status=status)
+}
+
+nvar<-0
+inFile<-"in.tab"
+responseTag<-"act"
+
+#in R 2.6 we could replace the follwont two lines with args<-commandArgs(TRUE)
+args<-commandArgs()
+args<-args[min(grep("^--args$",args)+1):length(args)]
+
+#args<-c("-nvar", 4,"-in","diabetes.tab","-responseTag","y")
+while(length(args) > 0)
+{  if(length(args)<2) exit(1) 
+
+   if(args[1] == "-in")
+   {  inFile<- args[2]
+      args<-args[-2:-1]
+      next
+   }
+   if(args[1] == "-nvar")
+   {  nvar<- as.integer(args[2])
+      args<-args[-2:-1]
+      next
+   }
+   if(args[1] == "-responseTag")
+   {  responseTag<- args[2]
+      args<-args[-2:-1]
+      next
+   }
+   if(args[1] == "-rmColumns")
+   {  rmCols<- args[2]
+      args<-args[-2:-1]
+      next
+   }
+
+   exit(1, paste("unknown argument:",args[1]))
+}
+
+if(! exists("inFile")) inFile<-"in.tab"
+
+inp<-read.table(inFile,header=T,sep="\t", quote="")
+
+#remove columns as from rmColumns
+if(exists("rmCols"))
+{  rmCols<-gsub(",","|",rmCols)
+   rmCols<-paste("^(", rmCols, ")$" ,sep="")
+   inp<-inp[,-grep(rmCols,colnames(inp))]
+}
+
+if(length(grep(paste("^",responseTag,"$",sep=""),colnames(inp))) == 0)
+   exit(1,paste("Could not find response column:", responseTag))
+
+if(ncol(inp) < 2)
+  exit(1,"No columns in input file")
+
+# extract activity column
+act<-inp[,responseTag]
+inp<-as.matrix(inp[,colnames(inp)!=responseTag])
+
+if(nvar == 0) nvar<-as.integer((length(inp[1,])+.5)/2)
+if(nvar > ncol(inp))
+   exit(1,"There are less columns than the number of variables requested") 
+
+if(nrow(inp)<nvar)
+   warning("Warining: There are only ", nrow(inp), 
+           " rows for ", nvar, " coeficients");
+
+
+library("lars")
+
+# extract nvar most important varables and create 
+# (ordinary) linear model OLS. The 
+larsModel<-lars(inp,act,type="lar",max.steps=nvar)
+# get names of variables which are found to be important
+cof<-coef(larsModel)[nvar+1,]
+cof<-signif(cof[cof!=0],3)
+vNames<-rownames(as.matrix(cof))
+larsFormula<-paste(signif(mean(act),3), "+", 
+                   paste(vNames,cof, sep= " * ", collapse=" + "))
+larsR2<-cor(act,predict.lars(larsModel,inp,nvar+1,type="fit")$fit)^2
+
+# now lets create a ordinary linear model using the same varables,
+# according to Bradley Efron et.al this this will always increase
+# the usual empirical R2 measure of fit (though not necessarily 
+# the true fitting accuracy)
+ols<-lm(act ~ inp[,vNames])
+#summary(ols)
+cof<-signif(coef(ols),3)
+olsFormula<-paste(cof[1], "+", 
+                  paste(vNames,cof[-1], sep= " * ", collapse=" + "))
+#compute r^2
+olsR2<-cor(act,predict(ols,as.data.frame(cbind(inp[,vNames],act))))^2
+
+cat(larsFormula," R2=",round(larsR2,3),"\n",
+    olsFormula," R2=",round(olsR2,3),"\n",
+    sep="")
+exit(0)
+
+
+#here are some examples on how to plot the models
+
+#predict ols by hand
+f<-function(x,coefi) sum(x*coefi[-1])+coefi[1]
+plot(act,apply(inp[,vNames],1,f,coef(ols)) )
+
+#predict ols using predict
+plot(act,predict(ols,inp[,vNames]))
+
+plot(act,predict.lars(larsModel,inp,2,type="fit")$fit)
+plot(act,predict.lars(larsModel,inp,3,type="fit")$fit)
+plot(act,predict.lars(larsModel,inp,4,type="fit")$fit)
+plot(act,predict.lars(larsModel,inp,5,type="fit")$fit)
+
+cor(act,apply(inp[,vNames],1,f,coef(ols)))
+cor(act,predict(ols,inp[,vNames]))
+#correlation coeficient for lars predictors for steps 1-nvar
+# staps start at 2 acctually because of intercept
+cor(act,predict.lars(larsModel,inp,2:(nvar+1),type="fit")$fit)
+
+#predicting lars by hand (no normalization needed)
+#plot(act,apply(inp,1,f,c(mean(act),coef(larsModel)[nvar+1,])) )

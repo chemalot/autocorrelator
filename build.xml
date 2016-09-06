@@ -1,0 +1,38 @@
+
+<project name="autocorrelator" default="compile" basedir=".">
+        <property environment="env"/>
+	<property name="classes.dir" value="classes" />
+	<!-- directories -->
+	<property name="jar.dir" value="exe" />
+	<property name="src.dir" value="src/autocorrelator" />
+	<property name="lib.dir" value="lib" />
+	<property name="oe.dir"  value="${env.OE_DIR}/lib" />
+
+	<path id="build.path">
+          <fileset dir="${lib.dir}">
+            <include name="**/*.jar"/>
+          </fileset>
+	</path>
+
+	<path id="openeye.path">
+          <fileset dir="${oe.dir}">
+            <include name="**/*.jar"/>
+          </fileset>
+	</path>
+
+	<target name="compile" description="Compile Source Files">
+		<mkdir dir="${classes.dir}"/>
+		<javac debug="true" srcdir="${src.dir}" destdir="${classes.dir}" source="1.6" target="1.6">
+			<classpath refid="build.path" />
+			<classpath refid="openeye.path" />
+		</javac>
+	</target>
+        <target name="jar" depends="compile">
+          <mkdir dir="${jar.dir}"/>
+          <jar destfile="${jar.dir}/${ant.project.name}.jar" basedir="${classes.dir}">
+            <manifest>
+                <attribute name="Main-Class" value="${main-class}"/>
+            </manifest>
+        </jar>
+    </target>
+</project>

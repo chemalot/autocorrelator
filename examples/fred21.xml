@@ -1,0 +1,99 @@
+<autoCorrelator>
+   <illuminatorTemplate>
+   </illuminatorTemplate>
+   
+   <load id='molSource' type='molecules>
+      <parameters>
+        <parameter name='push' type='list'/>
+      </parameters>
+   </load>
+
+   <job id='o2' type='omega2' experimentalDesign='random' numberOfExecutions='15'>
+      <description>Dummy Omega Run</description>
+      <parameters>
+         <parameter name='maxconfs' numType='int' type='range' from='60' 
+                    to='300' step='20' default='50'/>
+         <parameter name='ewindow' numType='int' type='range' from='10' 
+                    to='36' step='5' default='25'/>
+         <parameter name='fraglib' type='list'>
+            <value>~/external/openeye/data/omega2/fraglib.oeb.gz</value>
+         </parameter>
+         <parameter name='torlib' type='list'>
+            <value>/export/data/ccdev/agobbi/autocorrelator/torlib-NS5B.txt</value>
+            <value>/export/data/ccdev/agobbi/autocorrelator/torlib-2.0.txt</value>
+         </parameter>
+         <parameter name='transform' type='list'>
+            <value>/export/data/ccdev/agobbi/autocorrelator/2HN.rea</value>
+            <value>/export/data/ccdev/agobbi/autocorrelator/HN2.rea</value>
+            <value>/export/data/ccdev/agobbi/autocorrelator/HN4.rea</value>
+            <value>/export/data/ccdev/agobbi/autocorrelator/OMHN2.rea</value>
+            <value>/export/data/ccdev/agobbi/autocorrelator/OMHN4.rea</value>
+            <value>/export/data/ccdev/agobbi/autocorrelator/SM.rea</value>
+         </parameter>
+      </parameters>
+
+      <job id='f1' type='fred2.1' experimentalDesign='random' numberOfExecutions='15'>
+         <parameters>
+            <parameter name='box' type='list'>
+               <value>1OG5_SWF.pdb</value>
+            </parameter>
+            <parameter name='pro' type='list'>
+               <value>1OG5.pdb</value>
+            </parameter>
+
+            <parameter name='neg_img_size' type='list'>
+               <value>small</value>
+               <value>normal</value>
+               <value>large</value>
+               <value>xlarge</value>
+            </parameter>
+
+            <parameter name='scoring' type='list' default='-chemscore'>
+               <value>plp</value>
+               <value>shapegauss</value>
+               <value>chemgauss2</value>
+               <value>chemscore</value>
+               <value>screenscore</value>
+               <value>zapbind</value>
+            </parameter>
+            <parameter name='optimization' type='list' default='chemscore'>
+               <value>plp</value>
+               <value>shapegauss</value>
+               <value>chemgauss2</value>
+               <value>chemscore</value>
+               <value>screenscore</value>
+               <value>none</value>
+            </parameter>
+            <parameter name='refine' type='list' default='no_refinement'>
+               <value>no_refinement</value>
+               <value>lig_mmff</value>
+            </parameter>
+            <parameter name='clash_scale' type='range' from='0.4' to='1' step='.1' 
+                       default='0.5'/>
+            <parameter name='addbox' type='range' from='1' to='10' step='.5' 
+                       default='5.5'/>
+            <parameter name='exhaustive_scoring' type='list' default='chemgauss3'>
+               <value>plp</value>
+               <value>shapegauss</value>
+               <value>chemgauss2</value>
+            </parameter>
+            <parameter name='rstep' type='range' from='0.8' to='2.0' step='0.2'
+                       default='1.5'/>
+            <parameter name='tstep' type='range' from='0.6' to='1.4' step='0.2'
+                       default='1'/>
+
+         </parameters>
+         <job id='r' type='R2' experimentalDesign='random'
+              numberOfExecutions='1'>
+           <parameters>
+            <parameter name='numberOfVariables' type='list'>
+               <value>3</value>
+            </parameter>
+            <parameter name='method' type='list'>
+               <value>lars</value>
+            </parameter>
+            </parameters>
+         </job><!--R-->
+      </job>   <!--Fred-->
+   </job>      <!--omega-->
+</autoCorrelator>
