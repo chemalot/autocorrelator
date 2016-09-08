@@ -34,7 +34,12 @@ public final class SDFGroovyHelper
    {  if( s == null ) return null;
       s = s.trim();
       if( s.length() == 0 ) return null;
-      return new Integer(s);
+      try
+      {  return new Integer(s);
+      } catch(NumberFormatException e)
+      {  System.err.println("sdfGroovy: NumberFormatException " + s);
+         return null;
+      }
    }
 
    public static final BigDecimal f(String s)
@@ -42,7 +47,12 @@ public final class SDFGroovyHelper
       s = s.trim();
       if( s.length() == 0 ) return null;
 
-      return new BigDecimal(s);
+      try
+      {  return new BigDecimal(s);
+      } catch(NumberFormatException e)
+      {  System.err.println("sdfGroovy: NumberFormatException " + s);
+         return null;
+      }
    }
 
    public static final BigDecimal f(String s, final boolean removeOperator)
