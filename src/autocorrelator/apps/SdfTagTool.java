@@ -70,6 +70,7 @@ public class SdfTagTool
          "\t-addAll ....will add all values and the title from the first record in the\n" +
          "\t            given file\n" +
          "\t-IUPAC .....will add a IUPAC_style tag that stores a molecule's in the style specified\n" +
+         "\t-InChiKey .....will add InChi key to a tag named InChiKey\n" +
          "\t-title .....add contents of a tag or a 'counter' as the title\n"+
          "\t-format ....Will reformat one or multiple fields into a new one. eg.:\n" +
          "\t            oTag={it1}/{it2}/{it3} will create the new tag oTag combining the it? in tags.\n"+
@@ -83,7 +84,7 @@ public class SdfTagTool
    public static void main(String[] args)
    throws IOException
    {  CommandLineParser cParser;
-      String[] modes    = { "-addSmi", "-addCounter" };
+      String[] modes    = { "-addSmi", "-addCounter", "-InChiKey"};
       String[] parms    = {"-remove", "-title",  "-in", "-out", "-rename", "-prefix",
                            "-add",    "-addAll", "-keep", "-copy", "-append", "-reorder",
                            "-keepNumeric", "-rmDupTag", "-rmRepeatTag", "-transform", "-IUPAC",
@@ -112,6 +113,9 @@ public class SdfTagTool
          iupacStyles.addAll(Arrays.asList(dummies));
       }
 
+      /* for adding InChi key*/
+      boolean addInChiKey = cParser.wasGiven("-InChiKey");
+      
       /* for reordering sd tags*/
       dummy      = cParser.getValue("-reorder");
       if(dummy != null && dummy.length() > 0)
@@ -410,6 +414,15 @@ public class SdfTagTool
             if( iupacName.contains("BLAH") ) iupacName = "Unknown Fragment";
             String tag = "IUPAC_" + style;
             oechem.OESetSDData(mol,tag, iupacName);
+         }
+         
+         // add InChi key
+         if (addInChiKey)
+         {
+        	 OEInChIOptions inchi_opt = new OEInChIOptions();
+        	 inchi_opt.SetStereo(true); // use stereo information from input structure
+        	 String inchiKey = oechem.OECreateInChIKey(mol, inchi_opt);
+        	 oechem.OESetSDData(mol,  "InChiKey", inchiKey);
          }
 
          // title
