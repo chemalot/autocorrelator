@@ -177,6 +177,8 @@ public class SdfTransformer
    private static final int SMIFlags = OESMILESFlag.AtomStereo|OESMILESFlag.BondStereo
                                       |OESMILESFlag.AtomMaps  |OESMILESFlag.Isotopes;
 
+
+
    private static String scaffoldToSmirks(String scaffoldSmi)
    {  // Goal convert [U+1]c1nc([U+2])ncc1 to
       // [*:7][c:1]1[n:2][c:3]([*:8])[n:4][c:5][c:6]1
@@ -237,6 +239,66 @@ public class SdfTransformer
       return smirks;
    }
 
+
+/**
+ *  Python code to do the smae thing from MDL query mol
+ *
+   ifs = oemolistream(sys.argv[1])
+   mol = OEGraphMol()
+   OEReadMDLQueryFile(ifs, mol)
+
+   for atom in mol.GetAtoms():
+       atom.SetMapIdx(atom.GetIdx()+1)
+
+   reaction = OEGraphMol(mol)
+   OEAddMols(reaction, mol)
+   count, parts = OEDetermineComponents(reaction)
+   pred = OEPartPredAtom(parts)
+
+   reaction.SetRxn(True)
+
+   pred.SelectPart(1)
+   for atom in reaction.GetAtoms(pred):
+       atom.SetRxnRole(OERxnRole_Reactant)
+   pred.SelectPart(2)
+   for atom in reaction.GetAtoms(pred):
+       atom.SetRxnRole(OERxnRole_Product)
+
+   for atom in reaction.GetAtoms(OEAtomIsInProduct()):
+       if atom.GetAtomicNum() == 0 and atom.GetMapIdx() != 0:
+           if atom.HasData("MDLQueryAtomType"):
+               continue
+           bond = OEGetSoleSingleBond(atom)
+           if bond is None:
+               continue
+           print (bond)
+           nbr = OEGetSoleNeighbor(atom)
+           if nbr is None:
+               continue
+           print (nbr)
+           reaction.DeleteBond(bond)
+           newatom = reaction.NewAtom(OEElemNo_U)
+           newatom.SetIsotope(atom.GetIdx())
+           newatom.SetRxnRole(OERxnRole_Product)
+           reaction.NewBond(newatom, nbr, 1)
+
+           newatom = reaction.NewAtom(0)
+           reaction.NewBond(newatom, atom, 1)
+           newatom.SetRxnRole(OERxnRole_Product)
+           newatom.SetData("MDLQueryAtomType", 2) // any atom
+           atom.SetAtomicNum(OEElemNo_U)
+
+
+   opts = OE2DMolDisplayOptions(600, 300, OEScale_AutoScale)
+   opts.SetAtomPropertyFunctor(OEDisplayAtomMapIdx())
+   opts.SetTitleLocation(OETitleLocation_Hidden)
+
+   clearcoords = True
+   OEPrepareDepiction(reaction, clearcoords)
+   disp = OE2DMolDisplay(reaction, opts)
+
+   OERenderMolecule("reaction.svg", disp)
+*/
    private static MyUniMolecularTransform[] getTransformations(String fName) throws IOException
    {  if( fName == null )
          return new MyUniMolecularTransform[0];
