@@ -58,7 +58,7 @@ public class SDFGroovy
       +"For reading tags with special characters use tVal($mol,'tagName')\n"
       +"For writing tags with special characters use setVal($mol,'tagName', val)\n"
       +"For computing averages the special avg(String, ...) can be used.\n"
-      +"If the script returns false the record will not be printed to the falseOut file.\n"
+      +"If the script returns false the record will not be printed to the out file.\n"
       +"\n";
 
    static enum EXCEPTIONHandling
