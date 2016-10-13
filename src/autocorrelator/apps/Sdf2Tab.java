@@ -58,7 +58,7 @@ public class Sdf2Tab {
 
       cParser = new CommandLineParser(EXPLAIN,0,0,argv,modes,parms,reqParms);
       if( cParser.wasGiven("-tags") )
-         tags = Arrays.asList(cParser.getValue("-tags").split("\\|"));
+         tags.addAll(Arrays.asList(cParser.getValue("-tags").split("\\|")));
 
 
       newLineReplacement = cParser.getValue("-newLineReplacement");
