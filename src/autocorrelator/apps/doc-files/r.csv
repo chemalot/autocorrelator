@@ -1,0 +1,16 @@
+SMI,ID,ID
+[Br]c1nc(CCC2)c2c(Cl)n1,1,1
+[Br]c1nc(OCC2)c2c(Cl)n1,2,2
+[Br]c1nc(NCC2)c2c(Cl)n1,3,3
+[Br]c1nc(SCC2)c2c(Cl)n1,4,4
+[Br]c1nc([Se]CC2)c2c(Cl)n1,5,5
+c1cc(CCC2)c2c([Se])n1,6,6
+c1cc(OCC2)c2c([Se])n1,7,7
+c1cc(NCC2)c2c([Se])n1,8,8
+c1cc(SCC2)c2c([Se])n1,9,9
+c1cc([Se]CC2)c2c([Se])n1,10,10
+c1nc(CCC2)c2cn1,11,11
+c1nc(OCC2)c2cn1,12,12
+c1nc(NCC2)c2cn1,13,13
+c1nc(SCC2)c2cn1,14,14
+c1nc([Se]CC2)c2cn1,15,15

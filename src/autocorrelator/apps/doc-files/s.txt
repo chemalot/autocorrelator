@@ -1,0 +1,2 @@
+[U+]c1[#6,#7]c(CCC2)c2c([U++])n1 test
+[U+]c1[#6,#7;!$([NH])]c(CCC2)c2c([U+2])n1 test2
