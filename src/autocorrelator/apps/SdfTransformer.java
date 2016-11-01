@@ -16,16 +16,25 @@ along with the AutoCorrelator. If not, see <http://www.gnu.org/licenses/>.
 */
 package autocorrelator.apps;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
-import java.util.Map.Entry;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import openeye.oechem.*;
+import openeye.oedepict.*;
+
+/* Test config in eclipse:
+ *
+-in ${workspace_loc:autocorrelator}/src/autocorrelator/apps/doc-files/r.csv
+-out t.o.sdf
+-trans "${workspace_loc:autocorrelator}/src/autocorrelator/apps/doc-files/r.rxn [*:1][c:2]1[#6,#7:3][c:4]([S:5][C:6][C:7]2)[c:8]2[c:9]([*:10])[n:11]1>>[U+101][c:2]1[#6,#7:3][c:4]([S:5][C:6][C:7]2)[c:8]2[c:9]([U+102])[n:11]1.[*:1][U+1].[*:10][U+2] ${workspace_loc:autocorrelator}/src/autocorrelator/apps/doc-files/r.txt"
+-scaffold "${workspace_loc:autocorrelator}/src/autocorrelator/apps/doc-files/s.txt ${workspace_loc:autocorrelator}/src/autocorrelator/apps/doc-files/r.mol"
+-makeHExplicit -transformOnce
+-debug
 
 
+ */
 /**
  *
  */
@@ -34,13 +43,19 @@ public class SdfTransformer
 {
    private static final String EXPLAIN=
          "sdfTransformer [-makeHExplicit|makeHImplicit] -trans *.rea -in fn -out fn\n" +
-         "  -trans .....file with \\n separated transformations\n" +
-         "              or a list of space separated smirks\n" +
-         "              or 'neutralize' which applies set of neutralizing transforms\n" +
-         "  -scaffold . file with \\n separated list of scaffolds or list of space separated smiles\n" +
-         "              R-Groups are marked with [U+n]\n" +
-         "              the core will have attachment points with numbers increased by 100 so that the\n" +
+         "  -trans .... String containing space separated 'transformations'\n" +
+         "              Each 'transormation' can be either ending in .txt for a file\n" +
+         "              containing \\n separated smirks;\n" +
+         "              or a .rxn file\n" +
+         "              or a smirks\n" +
+         "              or 'neutralize' which applies a set of neutralizing transforms\n" +
+         "  -scaffold . String containing space separated 'scaffolds'. Each 'scaffold' can be:\n" +
+         "              or a txt file containing smarts strings with [U+n] atoms marking attachement points\n" +
+         "              or a mol file containing MDL query molecules with R groups marking attachement points\n" +
+         "              or a smarts with [U+n] atoms marking attachement points\n" +
+         "              the core will have attachment points with numbers increased by 10 so that the\n" +
          "              core is distinguishable from the R-Group in case of a single attachment point.\n" +
+         "              Note: In Molfile the highest officially supported charge is 15.\n" +
          "  -transformOnce Stop after first succesfull transformation\n" +
          "              Note: transformations always are applied to all sites\n" +
          "  -in.........input file (any OE filetype),  for sdtin use .type.\n" +
@@ -49,14 +64,17 @@ public class SdfTransformer
 
    private static String neutralTrans = "[O,S,#7,#6;-1;!$(*[*+]):1]>>[*+0:1][H] [#7,#15;+1:1][H]>>[*;+0:1]";
 
+   private static boolean debug = false;
+
    public static void main(String[] args)
    throws IOException
    {  CommandLineParser cParser;
-      String[] modes    = { "-makeHExplicit", "-makeHImplicit", "-transformOnce"};
+      String[] modes    = { "-makeHExplicit", "-makeHImplicit", "-transformOnce", "-debug"};
       String[] parms    = {"-trans", "-in", "-out", "-scaffold"};
       String[] reqParms = {"-in", "-out" };
 
       cParser = new CommandLineParser(EXPLAIN,0,0,args,modes,parms,reqParms);
+      debug = cParser.wasGiven("-debug");
 
       MyUniMolecularTransform[] reacts = getTransformations(cParser.getValue("-trans"));
       if(cParser.wasGiven("-scaffold"))
@@ -122,228 +140,457 @@ public class SdfTransformer
          rea.close();
    }
 
+
+   private static MyUniMolecularTransform[] getTransformations(String smirksOrFNames) throws IOException
+   {  if( smirksOrFNames == null )
+         return new MyUniMolecularTransform[0];
+
+      List<MyUniMolecularTransform> reaList = new ArrayList<MyUniMolecularTransform>();
+
+      String[] trans = smirksOrFNames.split("\\s");
+      for(String t : trans)
+      {  addTransform(t, reaList);
+      }
+
+      return reaList.toArray(new MyUniMolecularTransform[reaList.size()]);
+   }
+
+
+   private static void addTransform(String smirksOrFName, List<MyUniMolecularTransform> reaList ) throws IOException
+   {  if( new File(smirksOrFName).canRead() )
+      {  readTransform(smirksOrFName, reaList);
+         return;
+      }
+
+      parseTransform( smirksOrFName, reaList );
+   }
+
+   private static void parseTransform(String smirks, List<MyUniMolecularTransform> reaList )
+   {  if( "neutralize".equals(smirks))
+      {  smirks = neutralTrans;
+      }
+
+
+      OEUniMolecularRxn umr = new OEUniMolecularRxn(smirks);
+      if( ! umr.IsValid() )
+      {  System.err.printf("Invalid transformation: %s\n", smirks);
+         return;
+      }
+      if(umr != null) reaList.add(new MyUniMolecularTransform(umr, ""));
+   }
+
+   private static void readTransform(String fName, List<MyUniMolecularTransform> reaList) throws IOException
+   {  if( fName.toLowerCase().endsWith("rxn") )
+      {  readRXN(fName,reaList);
+         return;
+      }
+
+      if( ! fName.toLowerCase().endsWith(".txt") )
+         throw new Error("Only .txt and .rxn files are supported for transformations");
+
+      BufferedReader in =
+            new BufferedReader(new FileReader(fName));
+
+      String line;
+      Pattern rem = Pattern.compile("^\\s*#");
+      while( (line = in.readLine()) != null)
+      {  if(rem.matcher(line).find()) continue;
+         line = line.trim();
+         String[] val = line.split("\\s+",2);
+         String smirks = val[0];
+         String name = "";
+         if( val.length == 2 ) name = val[1];
+
+         OEUniMolecularRxn umr = new OEUniMolecularRxn(smirks);
+         if( ! umr.IsValid() )
+         {  System.err.printf("Invalid transformation: %s\n", line);
+            continue;
+         }
+         if(umr != null) reaList.add(new MyUniMolecularTransform(umr, name));
+      }
+      in.close();
+   }
+
+
+   private static void readRXN(String fName, List<MyUniMolecularTransform> reaList)
+   {  oemolistream rFile = new oemolistream(fName);
+      OEQMol reaction = new OEQMol();
+
+      // reading reaction
+      int opt = OEMDLQueryOpts.ReactionQuery;// | OEMDLQueryOpts.SuppressExplicitH;
+      oechem.OEReadMDLReactionQueryFile(rFile, reaction, opt);
+      rFile.close();
+      rFile.delete();
+
+      OEUniMolecularRxn umr = new OEUniMolecularRxn();
+      if (!umr.Init(reaction))
+      {  System.err.println("Failed to initialize reaction with :" + fName);
+         return;
+      }
+
+      reaList.add(new MyUniMolecularTransform(umr, fName));
+   }
+
    /**
     * return array contaiing {@link MyUniMolecularTransform} from reacts plus those
     * found in fName
-    * @param smilesOrFile either a space separated list of smiles or a filename cotinaing
+    * @param smartsOrFNames either a space separated list of smarts or filenames containing
     *              newline separated smiles. The smiles must contain [U+n] to mark the
     *              rGRoups.
     */
-   private static MyUniMolecularTransform[] getScaffolds(MyUniMolecularTransform[] reacts, String smilesOrFile)
+   private static MyUniMolecularTransform[] getScaffolds(MyUniMolecularTransform[] reacts, String smartsOrFNames)
          throws IOException
-   {  if( smilesOrFile == null )
+   {  if( smartsOrFNames == null )
          return reacts;
 
       List<MyUniMolecularTransform> reaList = new ArrayList<MyUniMolecularTransform>();
       reaList.addAll(Arrays.asList(reacts));
 
-      if( smilesOrFile.contains("[U") )  // fName is a list of smirks not a file name
-      {  String[] scaff = smilesOrFile.split("\\s");
-         for(String s : scaff)
-         {  OEUniMolecularRxn umr = new OEUniMolecularRxn(scaffoldToSmirks(s));
-            if( ! umr.IsValid() )
-            {  System.err.printf("Invalid scaffold: %s\n", s);
-               continue;
-            }
-            if(umr != null) reaList.add(new MyUniMolecularTransform(umr, ""));
-         }
-      }else
-      {  BufferedReader in =
-            new BufferedReader(new FileReader(smilesOrFile));
-
-         String line;
-         Pattern rem = Pattern.compile("^\\s*#");
-         while( (line = in.readLine()) != null)
-         {  if(rem.matcher(line).find()) continue;
-            line = line.trim();
-            String[] val = line.split("\\s+",2);
-            String scaff = val[0];
-            String name = "";
-            if( val.length == 2 ) name = val[1];
-
-            OEUniMolecularRxn umr = new OEUniMolecularRxn(scaffoldToSmirks(scaff));
-            if( ! umr.IsValid() )
-            {  System.err.printf("Invalid transformation: %s\n", line);
-               continue;
-            }
-            if(umr != null) reaList.add(new MyUniMolecularTransform(umr, name));
-         }
-         in.close();
+      String[] scaffold = smartsOrFNames.split("\\s");
+      for(String s : scaffold)
+      {  addScaffold(s, reaList);
       }
-
       return reaList.toArray(new MyUniMolecularTransform[reaList.size()]);
    }
 
-   private static final int SMIFlags = OESMILESFlag.AtomStereo|OESMILESFlag.BondStereo
-                                      |OESMILESFlag.AtomMaps  |OESMILESFlag.Isotopes;
+   private static void addScaffold(String smartsOrFName, List<MyUniMolecularTransform> reaList ) throws IOException
+   {  String fName = smartsOrFName.toLowerCase();
+      if( fName.endsWith(".mol") || fName.endsWith(".txt"))
+      {  readScaffold(smartsOrFName, reaList);
+         return;
+      }
+
+      parseScaffold( smartsOrFName, reaList );
+   }
+
+   private static void parseScaffold(String smarts, List<MyUniMolecularTransform> reaList )
+   {
+      if( ! smarts.contains("[U") )
+         throw new Error("Scaffold Smarts must contain at least one [U+]");
 
 
+      OEUniMolecularRxn umr = new OEUniMolecularRxn(scaffoldToSmirks(smarts));
+      if( ! umr.IsValid() )
+      {  System.err.printf("Invalid scaffold: %s\n", smarts);
+            return;
+      }
+      if(umr != null) reaList.add(new MyUniMolecularTransform(umr, ""));
+   }
 
-   private static String scaffoldToSmirks(String scaffoldSmi)
-   {  // Goal convert [U+1]c1nc([U+2])ncc1 to
-      // [*:7][c:1]1[n:2][c:3]([*:8])[n:4][c:5][c:6]1
-      //    >>  [U+101][c:1]1[n:2][c:3]([U+102])[n:4][c:5][c:6]1.[U+][*:7].[U+2][*:8];
-      OEMolBase mol = new OEGraphMol();
-      oechem.OEParseSmiles(mol, scaffoldSmi);
-      oechem.OEAssignAromaticFlags(mol);
-      if( ! mol.IsValid() || mol.NumAtoms() == 0 )
-         System.err.println("Invalid smiles: " + scaffoldSmi);
 
-      // get map of rgroup position to Map Index
-      Map<Integer,OEAtomBase> rgPosToAtomMap = new HashMap<Integer,OEAtomBase>();
+   private static void readScaffold(String fName, List<MyUniMolecularTransform> reaList ) throws IOException
+   {  if( fName.toLowerCase().endsWith(".mol") )
+      {  readMDLScaffold(fName, reaList );
+         return;
+      }
+
+      if(! fName.toLowerCase().endsWith(".txt") )
+          throw new Error("scallolds can be only in .mol or .txt format: " + fName);
+
+      BufferedReader in =
+         new BufferedReader(new FileReader(fName));
+
+      String line;
+      Pattern rem = Pattern.compile("^\\s*#");
+      while( (line = in.readLine()) != null)
+      {  if(rem.matcher(line).find()) continue;
+         line = line.trim();
+         String[] val = line.split("\\s+",2);
+         String scaff = val[0];
+         String name = "";
+         if( val.length == 2 ) name = val[1];
+
+         String smirks = scaffoldToSmirks(scaff);
+         OEUniMolecularRxn umr = new OEUniMolecularRxn(smirks);
+//         OEUniMolecularRxn umr = new OEUniMolecularRxn("[R1:1][c:2]1[#6,#7:3][c:4]([C:5][C:6][C:7]2)[c:8]2[c:9]([R2:10])[n:11]1>>[R1:1][c:2]1[#6,#7:3][c:4]([C:5][C:6][C:7]2)[c:8]2[c:9]([R2:10])[n:11]1");
+         if( ! umr.IsValid() )
+         {  System.err.printf("Invalid scaffold based transformation: %s\n   %s\n", line, smirks);
+            continue;
+         }
+         if(umr != null) reaList.add(new MyUniMolecularTransform(umr, name));
+      }
+      in.close();
+   }
+
+   /**
+    * Read MDL query mol file and generate transformation.
+    * Recognize Rn groups and supports query features.
+    */
+   private static void readMDLScaffold(String fName,
+         List<MyUniMolecularTransform> reaList)
+   {  oemolistream ifs = new oemolistream(fName);
+      if(! ifs.IsValid() ) throw new IOError(new Error("Error reading " + fName));
+      OEGraphMol mol = new OEGraphMol();
+      oechem.OEReadMDLQueryFile(ifs, mol);
+      ifs.close();
+      ifs.delete();
+
+      // add mapping indexes
       OEAtomBaseIter atIt = mol.GetAtoms();
-      int atMapIdx = 1;
-      while(atIt.hasNext())
+      while( atIt.hasNext() )
       {  OEAtomBase at = atIt.next();
-         int charge = at.GetFormalCharge();        // charge is RGroup number
+         at.SetMapIdx(at.GetIdx()+1);
+      }
+      atIt.delete();
 
-                  if( charge > 0 && at.GetAtomicNum() == OEElemNo.U )
-         {  if( rgPosToAtomMap.containsKey(charge) )
-               throw new Error(String.format("U+%d found multiple times", charge));
+      // init reaction by duplicating input core
+      OEGraphMol reaction = new OEGraphMol(mol);
+      oechem.OEAddMols(reaction, mol);
 
-         // Increment charge so that core smiles contains charge + 100
-            charge += 100;
-            at.SetFormalCharge(charge);
+      int parts[] = new int[reaction.GetMaxAtomIdx()];
+      oechem.OEDetermineComponents(reaction, parts);
+      OEPartPredAtom pred = new OEPartPredAtom(parts);
 
-            rgPosToAtomMap.put(charge,at);
+      reaction.SetRxn(true);
 
-         }else
-         {  at.SetMapIdx(atMapIdx++);
-            at.SetImplicitHCount(0);
+      // assign reactant atoms
+      pred.SelectPart(1);
+      atIt = reaction.GetAtoms(pred);
+      while(atIt.hasNext())
+         atIt.next().SetRxnRole(OERxnRole.Reactant);
+      atIt.delete();
+
+      // assign product atoms
+      pred.SelectPart(2);
+      atIt = reaction.GetAtoms(pred);
+      while(atIt.hasNext())
+         atIt.next().SetRxnRole(OERxnRole.Product);
+      atIt.delete();
+
+      // look for R groups and add U atoms
+      atIt = reaction.GetAtoms(new OEAtomIsInProduct());
+      while(atIt.hasNext())
+      {  OEAtomBase rAt = atIt.next();
+         if(rAt.GetAtomicNum() == 0 && rAt.GetMapIdx() != 0)
+         {  if( rAt.HasData("MDLQueryAtomType") ) continue;
+
+            String rName = rAt.GetName();
+            if( ! rName.startsWith("R") || rName.length() == 1) continue;
+            int rNum = Integer.parseInt(rName.substring(1));
+
+            OEBondBase bd = oechem.OEGetSoleSingleBond(rAt); // ???
+            if( bd == null ) continue;
+
+            // delete bond to R
+            OEAtomBase coreAt = bd.GetNbr(rAt);
+            reaction.DeleteBond(bd);
+
+            // create new U atom, link to core and increment mapping
+            OEAtomBase cureU = reaction.NewAtom(OEElemNo.U);
+            //printAtomInfo(rAt);
+            cureU.SetFormalCharge(rNum+10);
+            cureU.SetIntData("MDLQueryAtomCharge", rNum+10);
+            cureU.SetRxnRole(OERxnRole.Product);
+            reaction.NewBond(coreAt, cureU,1);   // Just single???
+
+            OEAtomBase rU = reaction.NewAtom(OEElemNo.U);
+            reaction.NewBond(rU, rAt, 1);
+            rU.SetRxnRole(OERxnRole.Product);
+            rU.SetFormalCharge(rNum);
+            rU.SetIntData("MDLQueryAtomCharge", rNum);
          }
       }
       atIt.delete();
 
+      OE2DMolDisplayOptions opts = new OE2DMolDisplayOptions(600, 300, OEScale.AutoScale);
+      opts.SetAtomPropertyFunctor(new OEDisplayAtomMapIdx());
+      opts.SetTitleLocation(OETitleLocation.Hidden);
 
-      StringBuilder productSmi = new StringBuilder();
-      // initialize productSmiles with core smiles
-      productSmi.append(oechem.OECreateSmiString(mol,SMIFlags));
+      boolean clearcoords = true;
+      oedepict.OEPrepareDepiction(reaction, clearcoords);
+      OE2DMolDisplay disp = new OE2DMolDisplay(reaction, opts);
 
-      // loop over rgroups and append disconnected fragments to productSmiles
-      for(Entry<Integer, OEAtomBase> posAtom : rgPosToAtomMap.entrySet())
-      {  int pos = posAtom.getKey();
-         OEAtomBase at = posAtom.getValue();
-         at.SetAtomicNum(0);
-         at.SetFormalCharge(0);
-         at.SetMapIdx(atMapIdx);
+      oedepict.OERenderMolecule("reaction.svg", disp);
 
-         // decrement rgroup charge so that rgroup has correct numbering
-         productSmi.append(".[U+").append(pos-100).append("][*:").append(atMapIdx).append(']');
-         atMapIdx++;
+      OEQMol qMol = new OEQMol();
+      oechem.OEBuildMDLQueryExpressions(qMol,reaction);
+
+      try
+      {  OEUniMolecularRxn umr = new OEUniMolecularRxn();
+         if(!umr.Init(qMol))
+            throw new Error("Invalid qMol: " + fName);
+//         if(!umr.Init("[*:1][c:2]1[#6,#7:3][c:4]([N:5][C:6][C:7]2)[c:8]2[c:9]([*:10])[n:11]1>>[U+101][c:2]1[#6,#7:3][c:4]([N:5][C:6][C:7]2)[c:8]2[c:9]([U+102])[n:11]1.[*:1][U+1].[*:10][U+2]"))
+//            throw new Error("Invalid qMol: " + fName);
+
+         if( ! umr.IsValid() )
+         {  throw new Error("Invalid qMol: " + fName);
+         }
+         if(umr != null) reaList.add(new MyUniMolecularTransform(umr, fName));
+      }finally
+      {  qMol.delete();
+         reaction.delete();
       }
-
-      String eductSmi = oechem.OECreateSmiString(mol,SMIFlags);
-      String smirks = eductSmi + ">>" + productSmi;
-      System.err.println("ScaffoldTransform: " + smirks);
-
-      return smirks;
    }
 
 
-/**
- *  Python code to do the smae thing from MDL query mol
- *
-   ifs = oemolistream(sys.argv[1])
-   mol = OEGraphMol()
-   OEReadMDLQueryFile(ifs, mol)
+   /**
+    *  Python code to do the smae thing from MDL query mol
+    *
+     ifs = oemolistream(sys.argv[1])
+     mol = OEGraphMol()
+     OEReadMDLQueryFile(ifs, mol)
 
-   for atom in mol.GetAtoms():
-       atom.SetMapIdx(atom.GetIdx()+1)
+     for atom in mol.GetAtoms():
+         atom.SetMapIdx(atom.GetIdx()+1)
 
-   reaction = OEGraphMol(mol)
-   OEAddMols(reaction, mol)
-   count, parts = OEDetermineComponents(reaction)
-   pred = OEPartPredAtom(parts)
+     reaction = OEGraphMol(mol)
+     OEAddMols(reaction, mol)
+     count, parts = OEDetermineComponents(reaction)
+     pred = OEPartPredAtom(parts)
 
-   reaction.SetRxn(True)
+     reaction.SetRxn(True)
 
-   pred.SelectPart(1)
-   for atom in reaction.GetAtoms(pred):
-       atom.SetRxnRole(OERxnRole_Reactant)
-   pred.SelectPart(2)
-   for atom in reaction.GetAtoms(pred):
-       atom.SetRxnRole(OERxnRole_Product)
+     pred.SelectPart(1)
+     for atom in reaction.GetAtoms(pred):
+         atom.SetRxnRole(OERxnRole_Reactant)
+     pred.SelectPart(2)
+     for atom in reaction.GetAtoms(pred):
+         atom.SetRxnRole(OERxnRole_Product)
 
-   for atom in reaction.GetAtoms(OEAtomIsInProduct()):
-       if atom.GetAtomicNum() == 0 and atom.GetMapIdx() != 0:
-           if atom.HasData("MDLQueryAtomType"):
-               continue
-           bond = OEGetSoleSingleBond(atom)
-           if bond is None:
-               continue
-           print (bond)
-           nbr = OEGetSoleNeighbor(atom)
-           if nbr is None:
-               continue
-           print (nbr)
-           reaction.DeleteBond(bond)
-           newatom = reaction.NewAtom(OEElemNo_U)
-           newatom.SetIsotope(atom.GetIdx())
-           newatom.SetRxnRole(OERxnRole_Product)
-           reaction.NewBond(newatom, nbr, 1)
+     for atom in reaction.GetAtoms(OEAtomIsInProduct()):
+         if atom.GetAtomicNum() == 0 and atom.GetMapIdx() != 0:
+             if atom.HasData("MDLQueryAtomType"):
+                 continue
+             bond = OEGetSoleSingleBond(atom)
+             if bond is None:
+                 continue
+             print (bond)
+             nbr = OEGetSoleNeighbor(atom)
+             if nbr is None:
+                 continue
+             print (nbr)
+             reaction.DeleteBond(bond)
+             newatom = reaction.NewAtom(OEElemNo_U)
+             newatom.SetIsotope(atom.GetIdx())
+             newatom.SetRxnRole(OERxnRole_Product)
+             reaction.NewBond(newatom, nbr, 1)
 
-           newatom = reaction.NewAtom(0)
-           reaction.NewBond(newatom, atom, 1)
-           newatom.SetRxnRole(OERxnRole_Product)
-           newatom.SetData("MDLQueryAtomType", 2) // any atom
-           atom.SetAtomicNum(OEElemNo_U)
+             newatom = reaction.NewAtom(0)
+             reaction.NewBond(newatom, atom, 1)
+             newatom.SetRxnRole(OERxnRole_Product)
+             newatom.SetData("MDLQueryAtomType", 2) // any atom
+             atom.SetAtomicNum(OEElemNo_U)
 
 
-   opts = OE2DMolDisplayOptions(600, 300, OEScale_AutoScale)
-   opts.SetAtomPropertyFunctor(OEDisplayAtomMapIdx())
-   opts.SetTitleLocation(OETitleLocation_Hidden)
+     opts = OE2DMolDisplayOptions(600, 300, OEScale_AutoScale)
+     opts.SetAtomPropertyFunctor(OEDisplayAtomMapIdx())
+     opts.SetTitleLocation(OETitleLocation_Hidden)
 
-   clearcoords = True
-   OEPrepareDepiction(reaction, clearcoords)
-   disp = OE2DMolDisplay(reaction, opts)
+     clearcoords = True
+     OEPrepareDepiction(reaction, clearcoords)
+     disp = OE2DMolDisplay(reaction, opts)
 
-   OERenderMolecule("reaction.svg", disp)
-*/
-   private static MyUniMolecularTransform[] getTransformations(String fName) throws IOException
-   {  if( fName == null )
-         return new MyUniMolecularTransform[0];
+     OERenderMolecule("reaction.svg", disp)
+  */
 
-      List<MyUniMolecularTransform> reaList = new ArrayList<MyUniMolecularTransform>();
 
-      if( "neutralize".equals(fName))
-      {  fName = neutralTrans;
+   @SuppressWarnings("unused")
+   private static void printAtomInfo(OEAtomBase rAt)
+   {  System.err.println("Name: " + rAt.GetName()  );
+      OEBaseDataIter dIt = rAt.GetDataIter();
+      while( dIt.hasNext())
+      {  OEBaseData d = dIt.next();
+         System.err.println(d.GetTag() + " " + d.GetDataType() + " " + d.toString());
+      }
+      dIt.delete();
+   }
+
+   private static final Pattern CHARGEPat = Pattern.compile("\\d+");
+
+
+   private static String scaffoldToSmirks(String scaffoldSma)
+   {  // Goal convert [U+1]c1[n,c]c([U+2])ncc1 to
+      // [*:7][c:1]1[n,c:2][c:3]([*:8])[n:4][c:5][c:6]1
+      //    >>  [U+101][c:1]1[n,c:2][c:3]([U+102])[n:4][c:5][c:6]1.[U+][*:7].[U+2][*:8];
+
+      StringBuilder left = new StringBuilder(scaffoldSma.length()*5);
+      StringBuilder right = new StringBuilder(scaffoldSma.length()*5);
+      StringBuilder rGrp  = new StringBuilder();
+
+      int mapIdx = 1;
+      int cPos=0;
+      boolean attachmentFound = false;
+      while(cPos < scaffoldSma.length())
+      {  String at = getNextAtom(scaffoldSma,cPos);
+         if( at.startsWith("[") )
+         {  if( at.charAt(1) != 'U' )
+            {  left.append(at.substring(0,at.length()-1))
+                   .append(':').append(mapIdx).append(']');
+               right.append(at.substring(0,at.length()-1))
+                    .append(':').append(mapIdx++).append(']');
+            }else
+            {  int charge = 1;
+               if( at.contains("++") ) charge++;
+               Matcher mat = CHARGEPat.matcher(at);
+               if( mat.find() ) charge = Integer.parseInt(mat.group());
+
+               left.append("[*:") .append(mapIdx)  .append(']');
+               right.append("[U+").append(charge+10).append(']');
+               rGrp.append(".[*:").append(mapIdx++)  .append(']')
+                   .append("[U+") .append(charge)    .append(']');
+
+               attachmentFound = true;
+            }
+         }else
+         {  left .append('[').append(at).append(':').append(mapIdx).append(']');
+            right.append('[').append(at).append(':').append(mapIdx++).append(']');
+         }
+
+         cPos += at.length();
+
+         if( cPos >= scaffoldSma.length() ) return "";
+
+         String oth = getNextOther(scaffoldSma,cPos);
+         left .append(oth);
+         right.append(oth);
+         cPos += oth.length();
       }
 
-      if( fName.contains(">>") )
-      {  String[] trans = fName.split("\\s");
-         for(String t : trans)
-         {  OEUniMolecularRxn umr = new OEUniMolecularRxn(t);
-            if( ! umr.IsValid() )
-            {  System.err.printf("Invalid transformation: %s\n", t);
-               continue;
-            }
-            if(umr != null) reaList.add(new MyUniMolecularTransform(umr, ""));
-         }
-      }else
-      {  BufferedReader in =
-            new BufferedReader(new FileReader(fName));
+      left.append(">>").append(right).append(rGrp);
+      if(! attachmentFound )
+         System.err.printf("Warning: No U atoms found in scaffold: %s\n   %s\n",
+               scaffoldSma, left);
 
-         String line;
-         Pattern rem = Pattern.compile("^\\s*#");
-         while( (line = in.readLine()) != null)
-         {  if(rem.matcher(line).find()) continue;
-            line = line.trim();
-            String[] val = line.split("\\s+",2);
-            String smirks = val[0];
-            String name = "";
-            if( val.length == 2 ) name = val[1];
+      if( debug ) System.err.println(left);
 
-            OEUniMolecularRxn umr = new OEUniMolecularRxn(smirks);
-            if( ! umr.IsValid() )
-            {  System.err.printf("Invalid transformation: %s\n", line);
-               continue;
-            }
-            if(umr != null) reaList.add(new MyUniMolecularTransform(umr, name));
+      return left.toString();
+   }
+
+
+   private static String getNextAtom(String scaffoldSma, int cPos)
+   {  StringBuilder sb = new StringBuilder();
+
+      if(scaffoldSma.charAt(cPos) == '[' )
+      {  int nBrackets = 1;
+         while(nBrackets > 0)
+         {  sb.append(scaffoldSma.charAt(cPos++));
+            if( scaffoldSma.charAt(cPos) == ']' ) nBrackets--;
+            else if( scaffoldSma.charAt(cPos) == '[' ) nBrackets++;
          }
-         in.close();
+         sb.append(scaffoldSma.charAt(cPos));
+         return sb.toString();
       }
 
-      return reaList.toArray(new MyUniMolecularTransform[reaList.size()]);
+      int len = 1;
+      if(    scaffoldSma.regionMatches(true, cPos, "br", 0, 2)
+          || scaffoldSma.regionMatches(true, cPos, "cl", 0, 2) )
+         len = 2;
+
+      return scaffoldSma.substring(cPos, cPos+len );
+   }
+
+
+   private static String getNextOther(String scaffoldSma, int cPos)
+   {  if(   Character.isLetter(scaffoldSma.charAt(cPos))
+         || scaffoldSma.charAt(cPos) == '[' ) return "";
+
+      StringBuilder sb = new StringBuilder();
+      while( cPos < scaffoldSma.length()
+            && ! Character.isLetter(scaffoldSma.charAt(cPos) )
+            && scaffoldSma.charAt(cPos) != '[' )
+            sb.append(scaffoldSma.charAt(cPos++));
+
+      return sb.toString();
    }
 }
 
