@@ -185,9 +185,7 @@ public class SdfTransformer
          return;
       }
 
-      if( ! fName.toLowerCase().endsWith(".txt") )
-         throw new Error("Only .txt and .rxn files are supported for transformations");
-
+      // all but .rxn files are assuemd to be files contianing smirks <space> name
       BufferedReader in =
             new BufferedReader(new FileReader(fName));
 
@@ -285,7 +283,7 @@ public class SdfTransformer
       }
 
       if(! fName.toLowerCase().endsWith(".txt") )
-          throw new Error("scallolds can be only in .mol or .txt format: " + fName);
+          throw new Error("scaffolds can be only in .mol or .txt format: " + fName);
 
       BufferedReader in =
          new BufferedReader(new FileReader(fName));
