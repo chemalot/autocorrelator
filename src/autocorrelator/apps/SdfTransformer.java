@@ -45,12 +45,13 @@ public class SdfTransformer
          "sdfTransformer [-makeHExplicit|makeHImplicit] -trans *.rea -in fn -out fn\n" +
          "  -trans .... String containing space separated 'transformations'\n" +
          "              Each 'transormation' can be either ending in .txt for a file\n" +
-         "              containing \\n separated smirks;\n" +
+         "              containing \\n separated smirks' 'name\n" +
          "              or a .rxn file\n" +
          "              or a smirks\n" +
          "              or 'neutralize' which applies a set of neutralizing transforms\n" +
          "  -scaffold . String containing space separated 'scaffolds'. Each 'scaffold' can be:\n" +
-         "              or a txt file containing smarts strings with [U+n] atoms marking attachement points\n" +
+         "              a newline separeated txt file containing smarts' 'name \n" +
+         "                  with smarts containing [U+n] atoms marking attachement points\n" +
          "              or a mol file containing MDL query molecules with R groups marking attachement points\n" +
          "              or a smarts with [U+n] atoms marking attachement points\n" +
          "              the core will have attachment points with numbers increased by 10 so that the\n" +
