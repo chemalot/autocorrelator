@@ -22,17 +22,22 @@
 
 	<target name="compile" description="Compile Source Files">
 		<mkdir dir="${classes.dir}"/>
-		<javac debug="true" srcdir="${src.dir}" destdir="${classes.dir}" source="1.6" target="1.6">
+		<javac debug="true" srcdir="${src.dir}" destdir="${classes.dir}">
 			<classpath refid="build.path" />
 			<classpath refid="openeye.path" />
 		</javac>
 	</target>
-        <target name="jar" depends="compile">
-          <mkdir dir="${jar.dir}"/>
-          <jar destfile="${jar.dir}/${ant.project.name}.jar" basedir="${classes.dir}">
-            <manifest>
-                <attribute name="Main-Class" value="${main-class}"/>
-            </manifest>
-        </jar>
-    </target>
+   <target name="jar" depends="compile">
+      <mkdir dir="${jar.dir}"/>
+      <jar destfile="${jar.dir}/${ant.project.name}.jar" basedir="${classes.dir}">
+        <manifest>
+            <attribute name="Main-Class" value="${main-class}"/>
+        </manifest>
+      </jar>
+   </target>
+   <target name="clean" description="clean up" >
+    <!-- Delete the ${build} and ${dist} directory trees -->
+      <delete dir="${classes.dir}"/>
+      <delete><fileset dir='${jar.dir}'><include name='${ant.project.name}.jar'/></fileset></delete>
+  </target>
 </project>
