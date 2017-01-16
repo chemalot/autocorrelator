@@ -395,11 +395,15 @@ public class SdfTransformer
       opts.SetAtomPropertyFunctor(new OEDisplayAtomMapIdx());
       opts.SetTitleLocation(OETitleLocation.Hidden);
 
+      /*
+      OEGraphMol dummyMol = new OEGraphMol(reaction);
       boolean clearcoords = true;
-      oedepict.OEPrepareDepiction(reaction, clearcoords);
-      OE2DMolDisplay disp = new OE2DMolDisplay(reaction, opts);
+      oedepict.OEPrepareDepiction(dummyMol, clearcoords);
+      OE2DMolDisplay disp = new OE2DMolDisplay(dummyMol, opts);
 
       oedepict.OERenderMolecule("reaction.svg", disp);
+      /**/
+
 
       OEQMol qMol = new OEQMol();
       oechem.OEBuildMDLQueryExpressions(qMol,reaction);
