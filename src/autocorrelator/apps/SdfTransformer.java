@@ -30,7 +30,7 @@ import openeye.oedepict.*;
 -out t.o.sdf
 -trans "${workspace_loc:autocorrelator}/src/autocorrelator/apps/doc-files/r.rxn [*:1][c:2]1[#6,#7:3][c:4]([S:5][C:6][C:7]2)[c:8]2[c:9]([*:10])[n:11]1>>[U+101][c:2]1[#6,#7:3][c:4]([S:5][C:6][C:7]2)[c:8]2[c:9]([U+102])[n:11]1.[*:1][U+1].[*:10][U+2] ${workspace_loc:autocorrelator}/src/autocorrelator/apps/doc-files/r.txt"
 -scaffold "${workspace_loc:autocorrelator}/src/autocorrelator/apps/doc-files/s.txt ${workspace_loc:autocorrelator}/src/autocorrelator/apps/doc-files/r.mol"
--makeHExplicit -transformOnce
+-makeHExplicit -firstTransformation
 -debug
 
 
@@ -57,8 +57,12 @@ public class SdfTransformer
          "              the core will have attachment points with numbers increased by 10 so that the\n" +
          "              core is distinguishable from the R-Group in case of a single attachment point.\n" +
          "              Note: In Molfile the highest officially supported charge is 15.\n" +
-         "  -transformOnce Stop after first succesfull transformation\n" +
-         "              Note: transformations always are applied to all sites\n" +
+         "  -firstTransformation If multiple transformations are specified with -trans/-scaffold\n" +
+         "              stop after the first sucesssfull transformation.\n" +
+         "              If not given further reactions are applied to the products of the first transformation.\n" +
+         "  -singleReactionSite In molecules with multiple reactive sites: apply the transformations to each\n" +
+         "              site individualy returning multiple single site products.\n" +
+         "              The default is to exhaustivly apply each transformations to all sites\n" +
          "  -in.........input file (any OE filetype),  for sdtin use .type.\n" +
          "  -out........output file (any OE filetype), for stdout use .type.\n" +
          "\n";
@@ -67,17 +71,23 @@ public class SdfTransformer
 
    private static boolean debug = false;
 
+   private static MyTransFormFactory transFormFactory;
+
    public static void main(String[] args)
    throws IOException
    {  CommandLineParser cParser;
-      String[] modes    = { "-makeHExplicit", "-makeHImplicit", "-transformOnce", "-debug"};
+      String[] modes    = { "-makeHExplicit", "-makeHImplicit", "-transformOnce", "-debug",
+                            "-firstTransformation", "-singleReactionSite"};
       String[] parms    = {"-trans", "-in", "-out", "-scaffold"};
       String[] reqParms = {"-in", "-out" };
 
       cParser = new CommandLineParser(EXPLAIN,0,0,args,modes,parms,reqParms);
       debug = cParser.wasGiven("-debug");
 
-      MyUniMolecularTransform[] reacts = getTransformations(cParser.getValue("-trans"));
+
+      transFormFactory = new MyTransFormFactory(cParser.wasGiven("-singleReactionSite"));
+
+      MyTransform[] reacts = getTransformations(cParser.getValue("-trans"));
       if(cParser.wasGiven("-scaffold"))
          reacts = getScaffolds(reacts,cParser.getValue("-scaffold"));
       if( reacts.length == 0 )
@@ -92,7 +102,10 @@ public class SdfTransformer
                               || in.equals( "neutralize" );
 
       boolean makeHImplicit = cParser.wasGiven("-makeHImplicit");
-      boolean transformOnce = cParser.wasGiven("-transformOnce");
+      // -transformOnce is deprecated use -firstTransformation
+      boolean firstTransformation = cParser.wasGiven("-transformOnce");
+      if( cParser.wasGiven("-firstTransformation") )
+          firstTransformation = cParser.wasGiven("-firstTransformation");
 
       if( makeHExplicit && makeHImplicit )
       {  System.err.println("makeHImplicit may not be used with makeHExplicit");
@@ -102,62 +115,86 @@ public class SdfTransformer
       oemolistream ifs = new oemolistream(in);
       oemolostream ofs = new oemolostream(out);
 
-      StringBuilder reaNames = new StringBuilder(20);
+      Set<String> prodSet = new HashSet<String>();
       OEGraphMol mol = new OEGraphMol();
       while (oechem.OEReadMolecule(ifs, mol))
       {
          if(makeHExplicit) oechem.OEAddExplicitHydrogens(mol);
          if(makeHImplicit) oechem.OESuppressHydrogens(mol, false, false, false);
 
-
-         reaNames.setLength(0);
-         // checking for the smi change is a workaround because oechem.constCall
-         // was found not to always return true even when transforming correctly
-         String inSmi = oechem.OECreateCanSmiString(mol);
-         for(MyUniMolecularTransform rea : reacts)
-            if( rea.trans.constCall(mol) || ! inSmi.equals(oechem.OECreateCanSmiString(mol)))
-            {  String name = rea.name;
-               if( name.length() > 0 ) reaNames.append(name).append(',');
-               if( transformOnce )
-                  break;
+         List<OEMolBase> reagents = new ArrayList<OEMolBase>(1);
+         reagents.add(new OEGraphMol(mol));
+         List<OEMolBase> prods = reagents;
+         for(MyTransform rea : reacts)
+         {  prods = transform(rea, reagents);
+            if( firstTransformation && prods.size() > 0 )
+               break;
+            if( prods.size() > 0)
+            {  for(OEMolBase reagent: reagents) reagent.delete();
+               reagents = prods;
+            } else
+            {  prods = reagents;
             }
+         }
 
-         // remove last  ","
-         if( reaNames.length() > 1 ) reaNames.setLength(reaNames.length()-1);
+         prodSet.clear();
+         for( OEMolBase tmol: prods)
+         {  correctValence(tmol);
 
-         if( reaNames.length() > 0 )
-            oechem.OESetSDData(mol, "transformedBy", reaNames.toString());
+            // delete hydrogens that where added by makeHExplicit because they can
+            // cause wrong stereo perception in sdf file
+            if(makeHExplicit) oechem.OESuppressHydrogens(tmol);
 
-         // delete hydrogens that where added by makeHExplicit because they can
-         // cause wrong stereo perception in sdf file
-         if(makeHExplicit) oechem.OESuppressHydrogens(mol);
-
-         oechem.OEWriteMolecule(ofs, mol);
+            String smi = oechem.OECreateCanSmiString(tmol);
+            if( ! prodSet.contains(smi) )
+            {  oechem.OEWriteMolecule(ofs, tmol);
+               prodSet.add(smi);
+            }
+            tmol.delete();
+         }
          mol.Clear();
       }
       ifs.close();
       ofs.close();
-      for(MyUniMolecularTransform rea : reacts)
+      for(MyTransform rea : reacts)
          rea.close();
    }
 
 
-   private static MyUniMolecularTransform[] getTransformations(String smirksOrFNames) throws IOException
-   {  if( smirksOrFNames == null )
-         return new MyUniMolecularTransform[0];
+   private static List<OEMolBase> transform(MyTransform trans, List<OEMolBase> reagents)
+   {  ArrayList<OEMolBase> prods = new ArrayList<OEMolBase>();
+      for(OEMolBase mol : reagents)
+      {  trans.setReagent(mol);
+         while( trans.hasNext() )
+         {  OEMolBase tmol = trans.next();
+            String name = trans.getName();
+            String reaStr = oechem.OEGetSDData(tmol, "transformedBy");
+            if( reaStr.length() > 0 && name.length() > 0 ) reaStr += ',';
+            if( name.length() > 0 )
+               oechem.OESetSDData(tmol, "transformedBy", reaStr);
+            prods.add(tmol);
+         }
+      }
+      return prods;
+   }
 
-      List<MyUniMolecularTransform> reaList = new ArrayList<MyUniMolecularTransform>();
+
+   private static MyTransform[] getTransformations(String smirksOrFNames) throws IOException
+   {  if( smirksOrFNames == null )
+         return new MyTransform[0];
+
+      List<MyTransform> reaList = new ArrayList<MyTransform>();
 
       String[] trans = smirksOrFNames.split("\\s");
       for(String t : trans)
       {  addTransform(t, reaList);
       }
 
-      return reaList.toArray(new MyUniMolecularTransform[reaList.size()]);
+      return reaList.toArray(new MyTransform[reaList.size()]);
    }
 
 
-   private static void addTransform(String smirksOrFName, List<MyUniMolecularTransform> reaList ) throws IOException
+   private static void addTransform(String smirksOrFName, List<MyTransform> reaList ) throws IOException
    {  if( new File(smirksOrFName).canRead() )
       {  readTransform(smirksOrFName, reaList);
          return;
@@ -166,21 +203,16 @@ public class SdfTransformer
       parseTransform( smirksOrFName, reaList );
    }
 
-   private static void parseTransform(String smirks, List<MyUniMolecularTransform> reaList )
+   private static void parseTransform(String smirks, List<MyTransform> reaList )
    {  if( "neutralize".equals(smirks))
       {  smirks = neutralTrans;
       }
 
 
-      OEUniMolecularRxn umr = new OEUniMolecularRxn(smirks);
-      if( ! umr.IsValid() )
-      {  System.err.printf("Invalid transformation: %s\n", smirks);
-         return;
-      }
-      if(umr != null) reaList.add(new MyUniMolecularTransform(umr, ""));
+      reaList.add(transFormFactory.create(smirks, ""));
    }
 
-   private static void readTransform(String fName, List<MyUniMolecularTransform> reaList) throws IOException
+   private static void readTransform(String fName, List<MyTransform> reaList) throws IOException
    {  if( fName.toLowerCase().endsWith("rxn") )
       {  readRXN(fName,reaList);
          return;
@@ -200,18 +232,13 @@ public class SdfTransformer
          String name = "";
          if( val.length == 2 ) name = val[1];
 
-         OEUniMolecularRxn umr = new OEUniMolecularRxn(smirks);
-         if( ! umr.IsValid() )
-         {  System.err.printf("Invalid transformation: %s\n", line);
-            continue;
-         }
-         if(umr != null) reaList.add(new MyUniMolecularTransform(umr, name));
+         reaList.add(transFormFactory.create(smirks, name));
       }
       in.close();
    }
 
 
-   private static void readRXN(String fName, List<MyUniMolecularTransform> reaList)
+   private static void readRXN(String fName, List<MyTransform> reaList)
    {  oemolistream rFile = new oemolistream(fName);
       OEQMol reaction = new OEQMol();
 
@@ -221,13 +248,11 @@ public class SdfTransformer
       rFile.close();
       rFile.delete();
 
-      OEUniMolecularRxn umr = new OEUniMolecularRxn();
-      if (!umr.Init(reaction))
-      {  System.err.println("Failed to initialize reaction with :" + fName);
-         return;
+      try
+      {  reaList.add(transFormFactory.create(reaction, fName));
+      }finally
+      {  reaction.delete();
       }
-
-      reaList.add(new MyUniMolecularTransform(umr, fName));
    }
 
    /**
@@ -237,12 +262,12 @@ public class SdfTransformer
     *              newline separated smiles. The smiles must contain [U+n] to mark the
     *              rGRoups.
     */
-   private static MyUniMolecularTransform[] getScaffolds(MyUniMolecularTransform[] reacts, String smartsOrFNames)
+   private static MyTransform[] getScaffolds(MyTransform[] reacts, String smartsOrFNames)
          throws IOException
    {  if( smartsOrFNames == null )
          return reacts;
 
-      List<MyUniMolecularTransform> reaList = new ArrayList<MyUniMolecularTransform>();
+      List<MyTransform> reaList = new ArrayList<MyTransform>();
       reaList.addAll(Arrays.asList(reacts));
 
       String[] scaffold = smartsOrFNames.split("\\s");
@@ -252,7 +277,7 @@ public class SdfTransformer
       return reaList.toArray(new MyUniMolecularTransform[reaList.size()]);
    }
 
-   private static void addScaffold(String smartsOrFName, List<MyUniMolecularTransform> reaList ) throws IOException
+   private static void addScaffold(String smartsOrFName, List<MyTransform> reaList ) throws IOException
    {  String fName = smartsOrFName.toLowerCase();
       if( fName.endsWith(".mol") || fName.endsWith(".txt"))
       {  readScaffold(smartsOrFName, reaList);
@@ -262,22 +287,18 @@ public class SdfTransformer
       parseScaffold( smartsOrFName, reaList );
    }
 
-   private static void parseScaffold(String smarts, List<MyUniMolecularTransform> reaList )
+   private static void parseScaffold(String smarts, List<MyTransform> reaList )
    {
       if( ! smarts.contains("[U") )
          throw new Error("Scaffold Smarts must contain at least one [U+]");
 
 
-      OEUniMolecularRxn umr = new OEUniMolecularRxn(scaffoldToSmirks(smarts));
-      if( ! umr.IsValid() )
-      {  System.err.printf("Invalid scaffold: %s\n", smarts);
-            return;
-      }
-      if(umr != null) reaList.add(new MyUniMolecularTransform(umr, ""));
+      MyTransform tr = transFormFactory.create(scaffoldToSmirks(smarts), "");
+      reaList.add(tr);
    }
 
 
-   private static void readScaffold(String fName, List<MyUniMolecularTransform> reaList ) throws IOException
+   private static void readScaffold(String fName, List<MyTransform> reaList ) throws IOException
    {  if( fName.toLowerCase().endsWith(".mol") )
       {  readMDLScaffold(fName, reaList );
          return;
@@ -300,13 +321,7 @@ public class SdfTransformer
          if( val.length == 2 ) name = val[1];
 
          String smirks = scaffoldToSmirks(scaff);
-         OEUniMolecularRxn umr = new OEUniMolecularRxn(smirks);
-//         OEUniMolecularRxn umr = new OEUniMolecularRxn("[R1:1][c:2]1[#6,#7:3][c:4]([C:5][C:6][C:7]2)[c:8]2[c:9]([R2:10])[n:11]1>>[R1:1][c:2]1[#6,#7:3][c:4]([C:5][C:6][C:7]2)[c:8]2[c:9]([R2:10])[n:11]1");
-         if( ! umr.IsValid() )
-         {  System.err.printf("Invalid scaffold based transformation: %s\n   %s\n", line, smirks);
-            continue;
-         }
-         if(umr != null) reaList.add(new MyUniMolecularTransform(umr, name));
+         reaList.add(transFormFactory.create(smirks, name));
       }
       in.close();
    }
@@ -316,7 +331,7 @@ public class SdfTransformer
     * Recognize Rn groups and supports query features.
     */
    private static void readMDLScaffold(String fName,
-         List<MyUniMolecularTransform> reaList)
+         List<MyTransform> reaList)
    {  oemolistream ifs = new oemolistream(fName);
       if(! ifs.IsValid() ) throw new IOError(new Error("Error reading " + fName));
       OEGraphMol mol = new OEGraphMol();
@@ -409,82 +424,12 @@ public class SdfTransformer
       oechem.OEBuildMDLQueryExpressions(qMol,reaction);
 
       try
-      {  OEUniMolecularRxn umr = new OEUniMolecularRxn();
-         if(!umr.Init(qMol))
-            throw new Error("Invalid qMol: " + fName);
-//         if(!umr.Init("[*:1][c:2]1[#6,#7:3][c:4]([N:5][C:6][C:7]2)[c:8]2[c:9]([*:10])[n:11]1>>[U+101][c:2]1[#6,#7:3][c:4]([N:5][C:6][C:7]2)[c:8]2[c:9]([U+102])[n:11]1.[*:1][U+1].[*:10][U+2]"))
-//            throw new Error("Invalid qMol: " + fName);
-
-         if( ! umr.IsValid() )
-         {  throw new Error("Invalid qMol: " + fName);
-         }
-         if(umr != null) reaList.add(new MyUniMolecularTransform(umr, fName));
+      {  reaList.add(transFormFactory.create(qMol, fName));
       }finally
       {  qMol.delete();
          reaction.delete();
       }
    }
-
-
-   /**
-    *  Python code to do the smae thing from MDL query mol
-    *
-     ifs = oemolistream(sys.argv[1])
-     mol = OEGraphMol()
-     OEReadMDLQueryFile(ifs, mol)
-
-     for atom in mol.GetAtoms():
-         atom.SetMapIdx(atom.GetIdx()+1)
-
-     reaction = OEGraphMol(mol)
-     OEAddMols(reaction, mol)
-     count, parts = OEDetermineComponents(reaction)
-     pred = OEPartPredAtom(parts)
-
-     reaction.SetRxn(True)
-
-     pred.SelectPart(1)
-     for atom in reaction.GetAtoms(pred):
-         atom.SetRxnRole(OERxnRole_Reactant)
-     pred.SelectPart(2)
-     for atom in reaction.GetAtoms(pred):
-         atom.SetRxnRole(OERxnRole_Product)
-
-     for atom in reaction.GetAtoms(OEAtomIsInProduct()):
-         if atom.GetAtomicNum() == 0 and atom.GetMapIdx() != 0:
-             if atom.HasData("MDLQueryAtomType"):
-                 continue
-             bond = OEGetSoleSingleBond(atom)
-             if bond is None:
-                 continue
-             print (bond)
-             nbr = OEGetSoleNeighbor(atom)
-             if nbr is None:
-                 continue
-             print (nbr)
-             reaction.DeleteBond(bond)
-             newatom = reaction.NewAtom(OEElemNo_U)
-             newatom.SetIsotope(atom.GetIdx())
-             newatom.SetRxnRole(OERxnRole_Product)
-             reaction.NewBond(newatom, nbr, 1)
-
-             newatom = reaction.NewAtom(0)
-             reaction.NewBond(newatom, atom, 1)
-             newatom.SetRxnRole(OERxnRole_Product)
-             newatom.SetData("MDLQueryAtomType", 2) // any atom
-             atom.SetAtomicNum(OEElemNo_U)
-
-
-     opts = OE2DMolDisplayOptions(600, 300, OEScale_AutoScale)
-     opts.SetAtomPropertyFunctor(OEDisplayAtomMapIdx())
-     opts.SetTitleLocation(OETitleLocation_Hidden)
-
-     clearcoords = True
-     OEPrepareDepiction(reaction, clearcoords)
-     disp = OE2DMolDisplay(reaction, opts)
-
-     OERenderMolecule("reaction.svg", disp)
-  */
 
 
    @SuppressWarnings("unused")
@@ -595,16 +540,254 @@ public class SdfTransformer
 
       return sb.toString();
    }
+
+
+   private static OEMolBase correctValence(OEMolBase mol)
+   {
+      OEAtomBaseIter ai = mol.GetAtoms();
+
+      while (ai.hasNext()) {
+         OEAtomBase at = ai.next();
+         if (!(at.IsNitrogen() || at.IsOxygen() || at.IsSulfur() || at.IsCarbon()))
+            continue;
+
+         if (at.IsNitrogen()) {
+            correctValence(at, 3);
+         }
+         if (at.IsOxygen()) {
+            correctValence(at, 2);
+         }
+         if (at.IsCarbon()) {
+            correctValence(at, 4);
+         }
+         if (at.IsSulfur()) {
+            int d = at.GetDegree();
+            int v = at.GetValence();
+
+            switch (d - v) {
+            case 0: correctValence(at, 2); break;
+            case 1: correctValence(at, 4); break;
+            case 2: correctValence(at, 6); break;
+            default: break;
+            }
+
+         }
+      }
+
+      ai.delete();
+
+      return mol;
+   }
+
+   public static void correctValence(OEAtomBase atom, int targetValence)
+   {
+      int formalCharge = atom.GetFormalCharge();
+      int nvalence = atom.GetValence();
+      int nexplicitH = atom.GetExplicitHCount();
+      int nimplicitH =atom.GetImplicitHCount();
+      int valence = nvalence - formalCharge;
+
+      if (valence == targetValence)
+         return;
+      if (valence < targetValence) {
+         atom.SetImplicitHCount(Math.abs(nimplicitH + targetValence - valence));
+      }
+      else {
+         int correctedImplicitHcount = Math.max(0,  targetValence - valence + nimplicitH);
+         atom.SetImplicitHCount(correctedImplicitHcount);
+         valence = atom.GetExplicitValence() + correctedImplicitHcount;
+         if (valence > targetValence && nexplicitH >= valence - targetValence) {
+            RemoveExplicitHydrogen(atom, valence - targetValence);
+         }
+      }
+   }
+
+
+   private static void RemoveExplicitHydrogen(OEAtomBase atom, int nremove)
+   {
+      OEMolBase mol = atom.GetParent();
+      OEAtomBaseIter aiter = atom.GetAtoms();
+      while (aiter.hasNext()) {
+         OEAtomBase at = aiter.next();
+         if (at.IsHydrogen()) {
+            mol.DeleteAtom(at);
+            nremove--;
+            if (nremove == 0)
+               break;
+         }
+      }
+      aiter.delete();
+   }
+
 }
 
-class MyUniMolecularTransform
-{  final OEUniMolecularRxn trans;
-   final String name;
 
-   MyUniMolecularTransform(OEUniMolecularRxn trans, String name)
-   {  this.trans = trans;
+class MyTransFormFactory
+{  private final boolean singleReactionSite;
+
+   /**
+    * @param singleReactionSite if true and the educt has multiple reative sites
+    *        the transformatin will return one single site products for each
+    *        matching reactive site.
+    *        If false, all matchng sites are transformed exhaustivly.
+    */
+   public MyTransFormFactory(boolean singleReactionSite)
+   {  this.singleReactionSite = singleReactionSite;
+   }
+
+   MyTransform create(String smirks, String name)
+   {  if( singleReactionSite )
+         return new MyOELibTransform(smirks,name);
+      return new MyUniMolecularTransform(smirks, name);
+
+   }
+
+   MyTransform create(OEQMol qMol, String name)
+   {  if( singleReactionSite )
+         return new MyOELibTransform(qMol,name);
+      return new MyUniMolecularTransform(qMol, name);
+   }
+}
+
+
+
+interface MyTransform extends Iterator<OEMolBase>, Closeable
+{  String getName();
+   /**
+    * @param mol inptu and output moecule for transformation
+    */
+   void setReagent(OEMolBase mol);
+}
+
+
+
+class MyOELibTransform implements MyTransform
+{  private final String name;
+   private final OELibraryGen libGen;
+   private OEMolBaseIter prodIt = null;
+
+   MyOELibTransform(String smirks, String name)
+   {  this.libGen = new OELibraryGen(smirks);
+      if( ! libGen.IsValid() )
+         throw new IllegalArgumentException(name);
+      if( libGen.NumReactants() != 1 )
+         throw new IllegalArgumentException(
+               String.format("Reaction (%s) has %d reagends instead of just 1",
+                             name, libGen.NumReactants()));
+      libGen.SetValenceCorrection(true);
       this.name = name;
    }
 
-   void close() { trans.delete(); }
+
+   MyOELibTransform(OEQMol qMol, String name)
+   {  this.libGen = new OELibraryGen();
+      if( ! libGen.Init(qMol) && ! libGen.IsValid() )
+         throw new IllegalArgumentException(name);
+      if( libGen.NumReactants() != 1 )
+         throw new IllegalArgumentException(
+               String.format("Reaction (%s) has %d reagends instead of just 1",
+                             name, libGen.NumReactants()));
+      libGen.SetValenceCorrection(true);
+      this.name = name;
+   }
+
+
+
+   @Override
+   public void close()
+   {  if( prodIt != null )
+      {  prodIt.delete();
+         prodIt = null;
+      }
+      libGen.delete();
+   }
+
+   @Override
+   public String getName() { return name; }
+
+
+
+   /** reset transformation with new reagent **/
+   @Override
+   public void setReagent(OEMolBase mol)
+   {  libGen.SetStartingMaterial(mol, 0);
+      if( prodIt != null )
+      {  prodIt.delete();
+         prodIt = null;
+      }
+      prodIt = libGen.GetProducts();
+   }
+
+   @Override
+   public boolean hasNext()
+   {  return prodIt.hasNext();
+   }
+
+   @Override
+   public OEMolBase next()
+   {  if( ! hasNext() )
+         throw new NoSuchElementException();
+
+      return prodIt.next();
+   }
+}
+
+class MyUniMolecularTransform implements MyTransform
+{  private final OEUniMolecularRxn trans;
+   private final String name;
+   private boolean hasNext = false;
+   private OEGraphMol mol = null;
+   private String molSmi;
+
+   MyUniMolecularTransform(String smirks, String name)
+   {  this.trans = new OEUniMolecularRxn(smirks);
+      if( ! trans.IsValid() )
+         throw new IllegalArgumentException(name);
+      this.name = name;
+   }
+
+   MyUniMolecularTransform(OEQMol qMol, String name)
+   {  this.trans = new OEUniMolecularRxn();
+      if( ! trans.Init(qMol) && ! trans.IsValid() )
+         throw new IllegalArgumentException(name);
+      this.name = name;
+   }
+
+
+
+   @Override
+   public void close()
+   {  if( mol != null ) mol.delete();
+      mol = null;
+      trans.delete();
+   }
+
+   @Override
+   public String getName() { return name; }
+
+
+
+   /** reset transformation with new reagent **/
+   @Override
+   public void setReagent(OEMolBase mol)
+   {  if( this.mol != null ) this.mol.delete();
+      this.mol = new OEGraphMol(mol);
+      molSmi   = oechem.OECreateCanSmiString(mol);
+      // checking for the smi change is a workaround because oechem.constCall
+      // was found not to always return true even when transforming correctly
+      hasNext  = trans.constCall(this.mol) && molSmi != oechem.OECreateCanSmiString(this.mol);;
+   }
+
+   @Override
+   public boolean hasNext()
+   {  return hasNext;
+   }
+
+   @Override
+   public OEMolBase next()
+   {  if( ! hasNext )
+         throw new NoSuchElementException();
+      hasNext = false;
+      return new OEGraphMol(mol);
+   }
 }
