@@ -171,7 +171,7 @@ public class SdfTransformer
             String reaStr = oechem.OEGetSDData(tmol, "transformedBy");
             if( reaStr.length() > 0 && name.length() > 0 ) reaStr += ',';
             if( name.length() > 0 )
-               oechem.OESetSDData(tmol, "transformedBy", reaStr);
+               oechem.OESetSDData(tmol, "transformedBy", reaStr + name);
             prods.add(tmol);
          }
       }
