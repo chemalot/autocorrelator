@@ -759,7 +759,7 @@ class MyUniMolecularTransform implements MyTransform
    @Override
    public void close()
    {  if( mol != null ) mol.delete();
-   mol = null;
+      mol = null;
       trans.delete();
    }
 
@@ -776,7 +776,7 @@ class MyUniMolecularTransform implements MyTransform
       molSmi   = oechem.OECreateCanSmiString(mol);
       // checking for the smi change is a workaround because oechem.constCall
       // was found not to always return true even when transforming correctly
-      hasNext  = trans.constCall(this.mol) || molSmi != oechem.OECreateCanSmiString(this.mol);;
+      hasNext  = trans.constCall(this.mol) && molSmi != oechem.OECreateCanSmiString(this.mol);;
    }
 
    @Override
