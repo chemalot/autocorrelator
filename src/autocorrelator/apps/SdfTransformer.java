@@ -143,7 +143,9 @@ public class SdfTransformer
 
             // delete hydrogens that where added by makeHExplicit because they can
             // cause wrong stereo perception in sdf file
-            if(makeHExplicit) oechem.OESuppressHydrogens(tmol);
+            // OELibGen might add explicit hydrogens even when not in input or trnasformation
+            // if(makeHExplicit)
+            oechem.OESuppressHydrogens(tmol);
 
             String smi = oechem.OECreateCanSmiString(tmol);
             if( ! prodSet.contains(smi) )
