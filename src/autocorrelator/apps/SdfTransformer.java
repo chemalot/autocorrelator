@@ -149,7 +149,9 @@ public class SdfTransformer
 
             String smi = oechem.OECreateCanSmiString(tmol);
             if( ! prodSet.contains(smi) )
-            {  oechem.OEWriteMolecule(ofs, tmol);
+            {  tmol.ClearCoords(); // workaround for oe bug when creating new atoms with stereo
+                                  // reported 3/2017 should be fixed in next version
+               oechem.OEWriteMolecule(ofs, tmol);
                prodSet.add(smi);
             }
             tmol.delete();
