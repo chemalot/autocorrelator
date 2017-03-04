@@ -147,11 +147,12 @@ public class SdfTransformer
             // if(makeHExplicit)
             oechem.OESuppressHydrogens(tmol);
 
-            String smi = oechem.OECreateCanSmiString(tmol);
+            // workaround for oe bug when creating new atoms with stereo
+            // reported 3/2017 should be fixed in next version
+            tmol.ClearCoords();
+            String smi = oechem.OEMolToSmiles(tmol);
             if( ! prodSet.contains(smi) )
-            {  tmol.ClearCoords(); // workaround for oe bug when creating new atoms with stereo
-                                  // reported 3/2017 should be fixed in next version
-               oechem.OEWriteMolecule(ofs, tmol);
+            {  oechem.OEWriteMolecule(ofs, tmol);
                prodSet.add(smi);
             }
             tmol.delete();
