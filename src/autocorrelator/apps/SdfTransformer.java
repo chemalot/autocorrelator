@@ -189,6 +189,9 @@ public class SdfTransformer
    {  if( smirksOrFNames == null )
          return new MyTransform[0];
 
+      if( "neutralize".equals(smirksOrFNames))
+      {  smirksOrFNames = neutralTrans;
+      }
       List<MyTransform> reaList = new ArrayList<MyTransform>();
 
       String[] trans = smirksOrFNames.split("\\s");
@@ -206,16 +209,7 @@ public class SdfTransformer
          return;
       }
 
-      parseTransform( smirksOrFName, reaList );
-   }
-
-   private static void parseTransform(String smirks, List<MyTransform> reaList )
-   {  if( "neutralize".equals(smirks))
-      {  smirks = neutralTrans;
-      }
-
-
-      reaList.add(transFormFactory.create(smirks, ""));
+      reaList.add(transFormFactory.create(smirksOrFName, ""));
    }
 
    private static void readTransform(String fName, List<MyTransform> reaList) throws IOException
