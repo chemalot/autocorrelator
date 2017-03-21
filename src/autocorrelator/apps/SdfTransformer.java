@@ -87,7 +87,8 @@ public class SdfTransformer
 
       transFormFactory = new MyTransFormFactory(cParser.wasGiven("-singleReactionSite"));
 
-      MyTransform[] reacts = getTransformations(cParser.getValue("-trans"));
+      String trans = cParser.getValue("-trans");
+      MyTransform[] reacts = getTransformations(trans);
       if(cParser.wasGiven("-scaffold"))
          reacts = getScaffolds(reacts,cParser.getValue("-scaffold"));
       if( reacts.length == 0 )
@@ -99,7 +100,7 @@ public class SdfTransformer
       String in = cParser.getValue("-in");
       String out = cParser.getValue("-out");
       boolean makeHExplicit = cParser.wasGiven("-makeHExplicit")
-                              || in.equals( "neutralize" );
+                              || (trans != null && trans.equals( "neutralize" ));
 
       boolean makeHImplicit = cParser.wasGiven("-makeHImplicit");
       // -transformOnce is deprecated use -firstTransformation
