@@ -197,7 +197,8 @@ public class SdfTransformer
 
       String[] trans = smirksOrFNames.split("\\s");
       for(String t : trans)
-      {  addTransform(t, reaList);
+      {  if( t.length() > 0)
+         addTransform(t, reaList);
       }
 
       return reaList.toArray(new MyTransform[reaList.size()]);
@@ -230,7 +231,7 @@ public class SdfTransformer
          line = line.trim();
          String[] val = line.split("\\s+",2);
          val[0] = val[0].trim();
-         if val[0].length() == 0 ) continue;
+         if( val[0].length() == 0 ) continue;
          String smirks = val[0];
          String name = "";
          if( val.length == 2 ) name = val[1];
@@ -275,7 +276,8 @@ public class SdfTransformer
 
       String[] scaffold = smartsOrFNames.split("\\s");
       for(String s : scaffold)
-      {  addScaffold(s, reaList);
+      {  if(s.length() > 0)
+            addScaffold(s, reaList);
       }
       return reaList.toArray(new MyUniMolecularTransform[reaList.size()]);
    }
