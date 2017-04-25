@@ -229,6 +229,8 @@ public class SdfTransformer
       {  if(rem.matcher(line).find()) continue;
          line = line.trim();
          String[] val = line.split("\\s+",2);
+         val[0] = val[0].trim();
+         if val[0].length() == 0 ) continue;
          String smirks = val[0];
          String name = "";
          if( val.length == 2 ) name = val[1];
