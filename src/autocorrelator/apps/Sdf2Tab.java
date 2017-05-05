@@ -16,8 +16,7 @@ along with the AutoCorrelator. If not, see <http://www.gnu.org/licenses/>.
 */
 package autocorrelator.apps;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -33,6 +32,7 @@ public class Sdf2Tab {
          "              if not specified the tags from the first record are used.\n" +
          "              use SMILES to output the isomeric smiles\n" +
          "              use TITLE to output the MOLFILE title\n" +
+         "              If this is a readable fielname a newline separated list is read.\n" +
          "-tagRE........specifies the tags in the output by Regular expression. eg. '.*SMI'\n" +
          "              Note that only tags present in the first record are considered.\n" +
          "              If both -tags and -tagRE are given the -tags columns come first\n" +
@@ -58,7 +58,7 @@ public class Sdf2Tab {
 
       cParser = new CommandLineParser(EXPLAIN,0,0,argv,modes,parms,reqParms);
       if( cParser.wasGiven("-tags") )
-         tags.addAll(Arrays.asList(cParser.getValue("-tags").split("\\|")));
+         readTags(cParser.getValue("-tags"), tags);
 
 
       newLineReplacement = cParser.getValue("-newLineReplacement");
@@ -106,6 +106,31 @@ public class Sdf2Tab {
       }
       ifs.close();
 	}
+
+   private static void readTags(String tagStr, List<String> tags) throws IOException
+   {  if( new File(tagStr).canRead() )
+         tags.addAll(Arrays.asList(readSeparatedFile(tagStr)));
+      else
+         tags.addAll(Arrays.asList(tagStr.split("\\|")));
+   }
+
+
+   private static String[] readSeparatedFile(String fName) throws IOException
+   {  BufferedReader in = new BufferedReader(new FileReader(fName));
+      List<String> tags = new ArrayList<String>();
+
+      String line;
+      while( (line = in.readLine()) != null )
+      {  if( line.trim().length() == 0 ) continue;
+
+         tags.add(line.trim());
+      }
+      in.close();
+
+      return tags.toArray(new String[tags.size()]);
+   }
+
+
 
    private static void printField(OEGraphMol mol, String tag)
    {  String val;
