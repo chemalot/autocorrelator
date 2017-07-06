@@ -68,6 +68,7 @@ public class SdfSmartsGrep
       if( nonMatch )
       {  while (oechem.OEReadMolecule(ifs, mol))
          {  count++;
+            oechem.OEPrepareSearch(mol, ss);
             if( ! ss.SingleMatch(mol) )
             {  oechem.OEWriteMolecule(ofs, mol);
             }
@@ -77,6 +78,7 @@ public class SdfSmartsGrep
       }else
       {  while (oechem.OEReadMolecule(ifs, mol))
          {  count++;
+            oechem.OEPrepareSearch(mol, ss);
             if( ss.SingleMatch(mol) )
             {  oechem.OEWriteMolecule(ofs, mol);
             }
