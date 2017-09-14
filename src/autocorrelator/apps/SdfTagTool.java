@@ -64,8 +64,10 @@ public class SdfTagTool
          "\t-addSmi ....will add the SMI tag with the oeCanSmiles\n" +
          "\t-rmDupTag ..remove records if any previous records had the same val\n"+
          "\t-rmRepeatTag tag=n remove records if tag value was found more than n times previously\n"+
+         "\t-markAsRepeatTag add a Repeat Tag by prepending the word Repeat in front of argument to mark repeated records\n"+
          "\t-addCounter will add the counter tag with the position number\n" +
-         "\t-counterTag use the argumetn as the tag name in -addCounter\n" +
+         "\t-counterTag use the argument as the tag name in -addCounter\n" +
+         "\t-counterStart use the argument as first counter value in -addCounter\n" +
          "\t-add .......will add a tag with a constant value (use TITLE to replace mol-title with constant)\n" +
          "\t-addAll ....will add all values and the title from the first record in the\n" +
          "\t            given file\n" +
@@ -87,12 +89,14 @@ public class SdfTagTool
       String[] modes    = { "-addSmi", "-addCounter", "-InChiKey"};
       String[] parms    = {"-remove", "-title",  "-in", "-out", "-rename", "-prefix",
                            "-add",    "-addAll", "-keep", "-copy", "-append", "-reorder",
-                           "-keepNumeric", "-rmDupTag", "-rmRepeatTag", "-transform", "-IUPAC",
-                           "-format", "-formatNullReplacement", "-counterTag", "-numberRepeats" };
+                           "-keepNumeric", "-rmDupTag", "-rmRepeatTag", "-markAsRepeatTag", "-transform", "-IUPAC",
+                           "-format", "-formatNullReplacement", "-counterTag", "-counterStart", "-numberRepeats" };
       String[] reqParms = {"-in", "-out"};
       HashSet<String> keepTags = new HashSet<String>();
       String[] removeTags = new String[0];
       Set<String> rmDuplicatSet = new HashSet<String>(2000);
+      Set<String> markAsRepeatSet = new HashSet<String>(2000);
+
       List <String> reorderTags = new ArrayList<String>();
       List <String> iupacStyles = new ArrayList<String>();
 
@@ -135,6 +139,10 @@ public class SdfTagTool
       boolean addCounter = cParser.wasGiven("-addCounter");
       String counterTag  = cParser.getValue("-counterTag");
       if( counterTag == null ) counterTag = "counter";
+      int count = 0;
+      dummy = cParser.getValue("-counterStart");
+      if( dummy != null )
+         count = Integer.parseInt(dummy) - 1;
 
       dummy = cParser.getValue("-rename");
       Map<String, String> renameMap = getNameValuePairs(dummy);
@@ -204,13 +212,14 @@ public class SdfTagTool
 
       String prefix = cParser.getValue("-prefix");
       String rmDupTag = cParser.getValue("-rmDupTag");
+      String markAsRepeatTag = cParser.getValue("-markAsRepeatTag");
+      String repeatTag = "Repeat " + markAsRepeatTag;
       String in = cParser.getValue("-in");
       String out = cParser.getValue("-out");
 
       oemolistream ifs = new oemolistream(in);
       oemolostream ofs = new oemolostream(out);
 
-      int count = 0;
       OEGraphMol mol = new OEGraphMol();
       OEGraphMol tmpMol = new OEGraphMol();
       while (oechem.OEReadMolecule(ifs, mol))
@@ -371,6 +380,23 @@ public class SdfTagTool
                continue;
             else
                rmDuplicatSet.add(dummy);
+         }
+         
+         // mark records as duplicated by checking for duplicated tag values
+         if (markAsRepeatTag != null)
+         {
+        	 if( "TITLE".equals(markAsRepeatTag) )
+                 dummy = mol.GetTitle();
+              else
+                 dummy = oechem.OEGetSDData(mol, markAsRepeatTag);
+        	 if (markAsRepeatSet.contains(dummy))
+        	 {
+        		 // mark as duplicate
+        		 oechem.OESetSDData(mol,  repeatTag, "Yes");
+        	 }else
+        	 {
+        		 markAsRepeatSet.add(dummy);
+        	 }
          }
 
          if( rmRepeatTag != null )
