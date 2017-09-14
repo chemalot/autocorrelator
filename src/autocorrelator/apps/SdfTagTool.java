@@ -63,11 +63,11 @@ public class SdfTagTool
          "\t-transform .regular expression transform (use '\\' to quote '/') eg. TAGNAME/a/b/\n"+
          "\t-addSmi ....will add the SMI tag with the oeCanSmiles\n" +
          "\t-rmDupTag ..remove records if any previous records had the same val\n"+
-         "\t-rmRepeatTag tag=n remove records if tag value was found more than n times previously\n"+
          "\t-markAsRepeatTag add a Repeat Tag by prepending the word Repeat in front of argument to mark repeated records\n"+
-         "\t-addCounter will add the counter tag with the position number\n" +
+         "\t-rmRepeatTag tag=n remove records if tag value was found more than n times previously\n"+
          "\t-counterTag use the argument as the tag name in -addCounter\n" +
          "\t-counterStart use the argument as first counter value in -addCounter\n" +
+         "\t-addCounter will add the counter tag with the position number\n" +
          "\t-add .......will add a tag with a constant value (use TITLE to replace mol-title with constant)\n" +
          "\t-addAll ....will add all values and the title from the first record in the\n" +
          "\t            given file\n" +
@@ -385,19 +385,20 @@ public class SdfTagTool
          
          // mark records as duplicated by checking for duplicated tag values
          if (markAsRepeatTag != null)
-         {
-        	 if( "TITLE".equals(markAsRepeatTag) )
-                 dummy = mol.GetTitle();
-              else
-                 dummy = oechem.OEGetSDData(mol, markAsRepeatTag);
-        	 if (markAsRepeatSet.contains(dummy))
-        	 {
-        		 // mark as duplicate
-        		 oechem.OESetSDData(mol,  repeatTag, "Yes");
-        	 }else
-        	 {
-        		 markAsRepeatSet.add(dummy);
-        	 }
+         {  
+            if( "TITLE".equals(markAsRepeatTag) )
+               dummy = mol.GetTitle();
+            else
+               dummy = oechem.OEGetSDData(mol, markAsRepeatTag);
+            
+            if (markAsRepeatSet.contains(dummy))
+            {
+               // mark as duplicate
+               oechem.OESetSDData(mol, repeatTag, "Yes");
+            }else
+            {
+               markAsRepeatSet.add(dummy);
+            }
          }
 
          if( rmRepeatTag != null )
