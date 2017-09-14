@@ -73,7 +73,8 @@ public class SdfTagTool
          "\t-InChiKey .....will add InChi key to a tag named InChiKey\n" +
          "\t-title .....add contents of a tag or a 'counter' as the title\n"+
          "\t-format ....Will reformat one or multiple fields into a new one. eg.:\n" +
-         "\t            oTag={it1}/{it2}/{it3} will create the new tag oTag combining the it? in tags.\n"+
+         "\t            oTag={it1}/{it2}/{it3} : create out-tag (oTag) combining values from in-tags (it?).\n"+
+         "\t            For numeric fields the in-tags can contain roundign information e.g. {tag:r3}\n"+
          "\t-formatNullReplacement specify the string replacing an empty value in -format (def=_)\n"+
          "\t-reorder ...reorder tags, unspecified tags are appened at the end, in their original order.\n"+
       "   All '|' seperated options can also be entered by a newline separated file:\n"+
@@ -194,7 +195,7 @@ public class SdfTagTool
          }
 
          formatOutTag = dummy.substring(0,dummy.indexOf("="));
-         formatParser = Pattern.compile("\\{([^}]+?)\\}").matcher(dummy.substring(formatOutTag.length()+1));
+         formatParser = Pattern.compile("\\{(([^}]+?)(:(r)\\d+)?)\\}").matcher(dummy.substring(formatOutTag.length()+1));
          if( ! formatParser.find() )
          {  System.err.println("No input tags ({tagName}) specified in -format " + dummy);
             System.exit(1);
@@ -437,14 +438,22 @@ public class SdfTagTool
          {  StringBuffer sb = new StringBuffer();
 
             while( formatParser.find() )
-            {  String inTag = formatParser.group(1);
+            {  String inTag = formatParser.group(2);
                String inVal;
                if( "TITLE".equals(inTag) )
                   inVal = mol.GetTitle();
                else
                   inVal = oechem.OEGetSDData(mol, inTag);
 
-               if( inVal == null || inVal.length() == 0 ) inVal = formatNullReplacment;
+               if( inVal == null || inVal.length() == 0 ) 
+               {  inVal = formatNullReplacment;
+               }else
+               {  String numFormat = formatParser.group(3);
+                  if( numFormat != null )
+                  {  numFormat = numFormat.substring(2); // skip over :r 
+                     inVal = String.format("%g."+numFormat, Double.parseDouble(inVal));
+                  }
+               }
 
                formatParser.appendReplacement(sb, inVal);
             }
