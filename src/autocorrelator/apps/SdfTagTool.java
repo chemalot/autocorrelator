@@ -478,7 +478,7 @@ public class SdfTagTool
                {  String numFormat = formatParser.group(3);
                   if( numFormat != null )
                   {  numFormat = numFormat.substring(2); // skip over :r 
-                     inVal = String.format("%g."+numFormat, Double.parseDouble(inVal));
+                     inVal = String.format("%."+numFormat+'g', Double.parseDouble(inVal));
                   }
                }
 
