@@ -16,6 +16,7 @@ along with the AutoCorrelator. If not, see <http://www.gnu.org/licenses/>.
 */
 package autocorrelator.apps;
 
+import java.util.HashMap;
 import java.util.Random;
 
 import openeye.oechem.*;
@@ -37,6 +38,8 @@ public class SdfSplicer
          "\t-start n ...First molecule to include in output (default=1)\n" +
          "\t-end n .....First molecule to be excluded from output (default all)\n"+
          "\t-count n ...How many molecules to output (default none)\n"+
+         "\t-rndTag ....When using rndFract select randomly baseed on group not record\n" +
+         "            output random fraction of groups based on grouping by value in this tag\n"+
          "\t-rndFract ..Output randFract random records\n"+
          "\t-rndSeed ...Random Seed fro rndFract\n"+
          "\t-readAll ...continue reading input even if no more output is produced\n"+
@@ -47,7 +50,7 @@ public class SdfSplicer
    {  CommandLineParser cParser;
       String[] modes    = { "-readAll" };
       String[] parms    = { "-start", "-end", "-in", "-out", "-skipped", "-count",
-                            "-rndFract", "-rndSeed" };
+                            "-rndTag", "-rndFract", "-rndSeed" };
       String[] reqParms = {"-in", "-out" };
 
       cParser = new CommandLineParser(EXPLAIN,0,0,args,modes,parms,reqParms);
@@ -65,9 +68,15 @@ public class SdfSplicer
          end = start + Integer.parseInt(cParser.getValue("-count"));
 
       Random rnd = null;
+      String rndTag = null;
+      HashMap<String, Boolean> rndGroupSelected = null;
       double rndFract = 2D;
       if( cParser.wasGiven("-rndFract") )
       {  rndFract = Double.parseDouble(cParser.getValue("-rndFract"));
+         if( cParser.wasGiven("rndTag") )
+         {  rndTag = cParser.getValue("rndTag");
+            rndGroupSelected = new HashMap<String, Boolean>();
+         }
          if(cParser.wasGiven("-rndSeed"))
             rnd = new Random(Long.parseLong(cParser.getValue("-rndSeed")));
          else
@@ -112,7 +121,23 @@ public class SdfSplicer
             continue;
          }
 
-         if( rnd == null || rnd.nextDouble() < rndFract)
+         boolean selected = true;
+         if( rndTag != null )
+         {  String groupName = oechem.OEGetSDData(mol, rndTag);
+         
+            Boolean groupSelected = rndGroupSelected.get(groupName);
+            if( groupSelected == null )
+            {  selected = rnd.nextDouble() < rndFract;
+               rndGroupSelected.put(groupName, selected );
+            } else
+            {   selected = groupSelected;
+            }
+            
+         } else if( rnd == null || rnd.nextDouble() >= rndFract)
+         {  selected = false;
+         }
+         
+         if( selected )
             oechem.OEWriteMolecule(ofs, mol);
          else
             oechem.OEWriteMolecule(ofsSkipped, mol);

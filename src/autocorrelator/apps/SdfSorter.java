@@ -31,16 +31,16 @@ import openeye.oechem.*;
 public class SdfSorter
 {  private static final String EXPLAIN=
          "sdfSorter -numeric -sortTag tagName -in fn -out fn\n\n" +
-         "\t-in.........input file (any OE filetype),  for sdtin use .type.\n" +
-         "\t-out........output file (any OE filetype), for stdout use .type.\n" +
-         "\t-maxOutput..only output n records\n"+
+         "\t-in ........input file (any OE filetype),  for sdtin use .type.\n" +
+         "\t-out .......output file (any OE filetype), for stdout use .type.\n" +
+         "\t-maxOut ....only output n records\n"+
          "\t-limitRepeats tagName=count will limit repeats of recors with the same\n" +
          "\t\tvalue for the given tag to count number of repeats\n"+
-         "\t-asc........sort in ascending order (default).\n" +
-         "\t-desc.......sort in descending order.\n" +
-         "\t-string.....sort in alphabetic order (default). null => ''\n" +
-         "\t-numeric....sort in numerical numeric order. null sort last\n" +
-         "\t-sortTag....name of tag on which to sort.\n" +
+         "\t-asc .......sort in ascending order (default).\n" +
+         "\t-desc ......sort in descending order.\n" +
+         "\t-string ....sort in alphabetic order (default). null => ''\n" +
+         "\t-numeric ...sort in numerical numeric order. null sort last\n" +
+         "\t-sortTag ...name of tag on which to sort.\n" +
          "The last tree tags can be repeated, sorting will be prioratized left to right.\n" +
          "Any -numeric, -asc or -desc flag will influence subsequent sortTags.\n\n";
 
