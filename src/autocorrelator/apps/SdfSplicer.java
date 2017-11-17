@@ -133,7 +133,7 @@ public class SdfSplicer
             {   selected = groupSelected;
             }
             
-         } else if( rnd == null || rnd.nextDouble() >= rndFract)
+         } else if( rnd != null && rnd.nextDouble() >= rndFract)
          {  selected = false;
          }
          
