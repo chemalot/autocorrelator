@@ -140,7 +140,7 @@ public class SdfSplicer
          if( selected )
             oechem.OEWriteMolecule(ofs, mol);
          else
-            oechem.OEWriteMolecule(ofsSkipped, mol);
+            if( ofsSkipped != null ) oechem.OEWriteMolecule(ofsSkipped, mol);
       }
 
       if( readAll )
