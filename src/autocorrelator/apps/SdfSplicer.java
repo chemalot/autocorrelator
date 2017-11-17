@@ -73,8 +73,8 @@ public class SdfSplicer
       double rndFract = 2D;
       if( cParser.wasGiven("-rndFract") )
       {  rndFract = Double.parseDouble(cParser.getValue("-rndFract"));
-         if( cParser.wasGiven("rndTag") )
-         {  rndTag = cParser.getValue("rndTag");
+         if( cParser.wasGiven("-rndTag") )
+         {  rndTag = cParser.getValue("-rndTag");
             rndGroupSelected = new HashMap<String, Boolean>();
          }
          if(cParser.wasGiven("-rndSeed"))
