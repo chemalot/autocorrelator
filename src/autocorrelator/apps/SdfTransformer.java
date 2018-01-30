@@ -43,13 +43,13 @@ public class SdfTransformer
 {
    private static final String EXPLAIN=
          "sdfTransformer [-makeHExplicit|makeHImplicit] -trans *.rea -in fn -out fn\n" +
-         "  -trans .... String containing space separated 'transformations'\n" +
+         "  -trans .... String containing SPACE separated 'transformations'\n" +
          "              Each 'transormation' can be either ending in .txt for a file\n" +
          "              containing \\n separated smirks' 'name\n" +
          "              or a .rxn file\n" +
          "              or a smirks\n" +
          "              or 'neutralize' which applies a set of neutralizing transforms\n" +
-         "  -scaffold . String containing space separated 'scaffolds'. Each 'scaffold' can be:\n" +
+         "  -scaffold . String containing SPACE separated 'scaffolds'. Each 'scaffold' can be:\n" +
          "              a newline separeated txt file containing smarts' 'name \n" +
          "                  with smarts containing [U+n] atoms marking attachement points\n" +
          "              or a mol file containing MDL query molecules with R groups marking attachement points\n" +

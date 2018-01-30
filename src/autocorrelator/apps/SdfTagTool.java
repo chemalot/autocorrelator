@@ -55,6 +55,7 @@ public class SdfTagTool
          "\t-numberRepeats.creat new field repeatTag_Num which counts the oocurence \n" +
          "\t               of consecutive values in repeatTag\n" +
          "\t-remove ....remove any tags with the specified names\n" +
+         "\t-removeRE ..remove any tags matchig the regular expression\n" +
          "\t-copy ......copy from tag to tag (TITLE can be used as src or dest)\n" +
          "\t-append ....append second tag to first tag\n" +
          "\t-rename ....rename tags specified, use TITLE to rename from and to the title.\n" +
@@ -88,13 +89,14 @@ public class SdfTagTool
    throws IOException
    {  CommandLineParser cParser;
       String[] modes    = { "-addSmi", "-addCounter", "-InChiKey"};
-      String[] parms    = {"-remove", "-title",  "-in", "-out", "-rename", "-prefix",
+      String[] parms    = {"-remove", "-removeRE", "-title",  "-in", "-out", "-rename", "-prefix",
                            "-add",    "-addAll", "-keep", "-copy", "-append", "-reorder",
                            "-keepNumeric", "-rmDupTag", "-rmRepeatTag", "-markAsRepeatTag", "-transform", "-IUPAC",
                            "-format", "-formatNullReplacement", "-counterTag", "-counterStart", "-numberRepeats" };
       String[] reqParms = {"-in", "-out"};
       HashSet<String> keepTags = new HashSet<String>();
       String[] removeTags = new String[0];
+      Pattern removeRE = null;
       Set<String> rmDuplicatSet = new HashSet<String>(2000);
       Set<String> markAsRepeatSet = new HashSet<String>(2000);
 
@@ -104,6 +106,10 @@ public class SdfTagTool
       cParser = new CommandLineParser(EXPLAIN,0,0,args,modes,parms,reqParms);
       String dummy      = cParser.getValue("-remove");
       if(dummy != null && dummy.length() > 0) removeTags = parseSeparatedArgument(dummy);
+      
+      dummy      = cParser.getValue("-removeRE");
+      if(dummy != null && dummy.length() > 0) removeRE = Pattern.compile(dummy);
+      
 
       dummy      = cParser.getValue("-keep");
       if(dummy != null && dummy.length() > 0)
@@ -250,6 +256,17 @@ public class SdfTagTool
             }
          }
 
+         if( removeRE != null )
+         {  OESDDataIter pairsIt = oechem.OEGetSDDataPairs(mol);
+            while(pairsIt.hasNext())
+            {  OESDDataPair pair = pairsIt.next();
+               String tag = pair.GetTag();
+               
+               if( removeRE.matcher(tag).matches() )
+                  oechem.OEDeleteSDData(mol, tag);
+            }
+            pairsIt.delete();            
+         }
          // copy
          for(Entry<String,String> entry : copyMap.entrySet())
          {  String fromTag = entry.getKey();
