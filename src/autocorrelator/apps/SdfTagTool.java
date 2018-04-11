@@ -387,7 +387,7 @@ public class SdfTagTool
          }
 
 
-         // remove Duplicate records
+         // remove Duplicate records, this is depricated as it is fully covered by rmRpeatTag
          if( rmDupTag != null )
          {  if( "TITLE".equals(rmDupTag) )
                dummy = mol.GetTitle();
@@ -418,6 +418,8 @@ public class SdfTagTool
             }
          }
 
+         
+         // rmRpeatTag
          if( rmRepeatTag != null )
          {  if( "TITLE".equals(rmRepeatTag) )
                dummy = mol.GetTitle();
