@@ -43,6 +43,7 @@ public class SdfTagTool
          "  -keep tag1|tag2|...\n"+
          "  -prefix tagPrefix\n"+
          "  -remove tag1|tag2|...\n"+
+         "  -rmRepeatTag tag=n\n"+
          "  -rename oldtag=newtag|tag2=newtag2\n"+
          "  -reorder tag1|tag2|..\n"+
          "  -numberRepeats repeatTag\n"  +
@@ -63,7 +64,6 @@ public class SdfTagTool
          "\t-keep ......keep only tags with the specified names (applied after rename and prefix).\n" +
          "\t-transform .regular expression transform (use '\\' to quote '/') eg. TAGNAME/a/b/\n"+
          "\t-addSmi ....will add the SMI tag with the oeCanSmiles\n" +
-         "\t-rmDupTag ..remove records if any previous records had the same val\n"+
          "\t-markAsRepeatTag add a Repeat Tag by prepending the word Repeat in front of argument to mark repeated records\n"+
          "\t-rmRepeatTag tag=n remove records if tag value was found more than n times previously\n"+
          "\t-counterTag use the argument as the tag name in -addCounter\n" +

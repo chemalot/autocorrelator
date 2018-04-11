@@ -349,7 +349,7 @@ public class SDFGroovy
       }
       varMatch.appendTail( sb );
 
-      groovyStrg = "import static autocorrelator.apps.SDFGroovyHelper.*;\n "
+      groovyStrg = "import static autocorrelator.apps.SDFGroovyHelper.*;import com.aestel.utility.DataFormat;\n "
                   + sb.toString();
       GroovyShell shell = new GroovyShell();
       Script script;
