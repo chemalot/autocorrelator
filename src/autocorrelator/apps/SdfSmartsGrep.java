@@ -39,7 +39,7 @@ public class SdfSmartsGrep
 
    public static void main(String[] args)
    {  CommandLineParser cParser;
-      String[] modes    = { "-v" };
+      String[] modes    = { "-v", "-makeHExplicit", "-makeHImplicit"};
       String[] parms    = { "-in", "-out" };
       String[] reqParms = {"-in", "-out" };
 
@@ -49,8 +49,19 @@ public class SdfSmartsGrep
       String out = cParser.getValue("-out");
       boolean nonMatch = cParser.wasGiven("-v");
 
+      boolean makeHExplicit = cParser.wasGiven("-makeHExplicit");
+      boolean makeHImplicit = cParser.wasGiven("-makeHImplicit");
+      if( makeHExplicit && makeHImplicit )
+      {  System.err.println("makeHImplicit may not be used with makeHExplicit");
+         System.exit(1);
+      }
+
+
       args = cParser.getRestArgs();
-      if( args.length != 1 )
+      if( args.length == 0 && (makeHExplicit || makeHImplicit) )
+      {  System.err.println("No Smarts given only applying hydrogen transformation!\n");
+         
+      } else if( args.length != 1 )
       {  System.err.println("Exactly one smarts must be given!\n"
                            +EXPLAIN );
          System.exit(1);
@@ -61,28 +72,46 @@ public class SdfSmartsGrep
 
       int count = 0;
       OEGraphMol mol = new OEGraphMol();
-      OESubSearch ss = new OESubSearch(args[0]);
-      if(! ss.IsValid())
-         throw new Error("Invalid Smarts " + args[0]);
+      OESubSearch ss = null;
+      if( args.length == 1)
+      {  ss = new OESubSearch(args[0]);
+         if(! ss.IsValid())
+            throw new Error("Invalid Smarts " + args[0]);
 
-      if( nonMatch )
-      {  while (oechem.OEReadMolecule(ifs, mol))
-         {  count++;
-            oechem.OEPrepareSearch(mol, ss);
-            if( ! ss.SingleMatch(mol) )
-            {  oechem.OEWriteMolecule(ofs, mol);
+         if( nonMatch )
+         {  while (oechem.OEReadMolecule(ifs, mol))
+            {  count++;
+               if(makeHExplicit) oechem.OEAddExplicitHydrogens(mol);
+               if(makeHImplicit) oechem.OESuppressHydrogens(mol, false, false, false);
+
+               oechem.OEPrepareSearch(mol, ss);
+               if( ! ss.SingleMatch(mol) )
+               {  oechem.OEWriteMolecule(ofs, mol);
+               }
+   
+               mol.Clear();
             }
-
-            mol.Clear();
+         }else
+         {  while (oechem.OEReadMolecule(ifs, mol))
+            {  count++;
+               if(makeHExplicit) oechem.OEAddExplicitHydrogens(mol);
+               if(makeHImplicit) oechem.OESuppressHydrogens(mol, false, false, false);
+               
+               oechem.OEPrepareSearch(mol, ss);
+               if( ss.SingleMatch(mol) )
+               {  oechem.OEWriteMolecule(ofs, mol);
+               }
+   
+               mol.Clear();
+            }
          }
-      }else
+      } else  // no smarts specified just hydrogen change
       {  while (oechem.OEReadMolecule(ifs, mol))
          {  count++;
-            oechem.OEPrepareSearch(mol, ss);
-            if( ss.SingleMatch(mol) )
-            {  oechem.OEWriteMolecule(ofs, mol);
-            }
+            if(makeHExplicit) oechem.OEAddExplicitHydrogens(mol);
+            if(makeHImplicit) oechem.OESuppressHydrogens(mol, false, false, false);
 
+            oechem.OEWriteMolecule(ofs, mol);
             mol.Clear();
          }
       }
@@ -90,6 +119,7 @@ public class SdfSmartsGrep
       ofs.close();
 
       mol.delete();
-      ss.delete();
+      if( ss != null) ss.delete();
+      System.err.printf("SdfSmartsGrep: completed reading %d compounds\n", count);
    }
 }
