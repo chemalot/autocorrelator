@@ -5,3 +5,7 @@ bak/
 exe/autocorrelator.jar
 
 src/autocorrelator/apps/SdfTransformerOld.java
+
+
+# just for internal gne use:
+gneBin
