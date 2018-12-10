@@ -111,7 +111,8 @@ public class SdfSplicer
 
       OEGraphMol mol = new OEGraphMol();
       int count = 0;
-      while (oechem.OEReadMolecule(ifs, mol))
+      boolean moleculeRead = false;
+      while (moleculeRead = oechem.OEReadMolecule(ifs, mol))
       {  count++;
          if( count >= end) break;
 
@@ -143,11 +144,11 @@ public class SdfSplicer
             if( ofsSkipped != null ) oechem.OEWriteMolecule(ofsSkipped, mol);
       }
 
-      if( readAll )
-      {  while (oechem.OEReadMolecule(ifs, mol))
-         {  if( ofsSkipped != null )
+      if( readAll && moleculeRead )
+      {  do
+         {  if( ofsSkipped != null ) 
                oechem.OEWriteMolecule(ofsSkipped, mol);
-         }
+         } while (oechem.OEReadMolecule(ifs, mol));
       }
 
       ifs.close();
