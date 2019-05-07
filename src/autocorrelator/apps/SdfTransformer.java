@@ -63,6 +63,7 @@ public class SdfTransformer
          "  -singleReactionSite In molecules with multiple reactive sites: apply the transformations to each\n" +
          "              site individualy returning multiple single site products.\n" +
          "              The default is to exhaustivly apply each transformations to all sites\n" +
+         "  -keepHydrogens Do not remove explicit H at the end.\n" +
          "  -in.........input file (any OE filetype),  for sdtin use .type.\n" +
          "  -out........output file (any OE filetype), for stdout use .type.\n" +
          "\n";
@@ -77,7 +78,7 @@ public class SdfTransformer
    throws IOException
    {  CommandLineParser cParser;
       String[] modes    = { "-makeHExplicit", "-makeHImplicit", "-transformOnce", "-debug",
-                            "-firstTransformation", "-singleReactionSite"};
+                            "-firstTransformation", "-singleReactionSite", "-keepHydrogens"};
       String[] parms    = {"-trans", "-in", "-out", "-scaffold"};
       String[] reqParms = {"-in", "-out" };
 
@@ -103,6 +104,8 @@ public class SdfTransformer
                               || (trans != null && trans.equals( "neutralize" ));
 
       boolean makeHImplicit = cParser.wasGiven("-makeHImplicit");
+      // -transformOnce is deprecated use -firstTransformation
+      boolean keepH = cParser.wasGiven("-keepHydrogens");
       // -transformOnce is deprecated use -firstTransformation
       boolean firstTransformation = cParser.wasGiven("-transformOnce");
       if( cParser.wasGiven("-firstTransformation") )
@@ -146,11 +149,13 @@ public class SdfTransformer
             // cause wrong stereo perception in sdf file
             // OELibGen might add explicit hydrogens even when not in input or trnasformation
             // if(makeHExplicit)
-            oechem.OESuppressHydrogens(tmol);
+            if( ! keepH )
+            {  oechem.OESuppressHydrogens(tmol);
+               // workaround for oe bug when creating new atoms with stereo
+               // reported 3/2017 should be fixed in next version
+               tmol.ClearCoords();
+            }
 
-            // workaround for oe bug when creating new atoms with stereo
-            // reported 3/2017 should be fixed in next version
-            tmol.ClearCoords();
             String smi = oechem.OEMolToSmiles(tmol);
             if( ! prodSet.contains(smi) )
             {  oechem.OEWriteMolecule(ofs, tmol);

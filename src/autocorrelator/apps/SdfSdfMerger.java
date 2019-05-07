@@ -83,7 +83,7 @@ public class SdfSdfMerger
       OEGraphMol mol = new OEGraphMol();
       while (oechem.OEReadMolecule(ifs, mol))
       {  String mergeValue;
-         if(masterTag.equals("title"))
+         if(masterTag.equalsIgnoreCase("title"))
             mergeValue = mol.GetTitle();
          else
             mergeValue = oechem.OEGetSDData(mol,masterTag);
@@ -131,7 +131,7 @@ public class SdfSdfMerger
       OEGraphMol mol = new OEGraphMol();
       while (oechem.OEReadMolecule(ifs, mol))
       {  String id;
-         if(secondTag.equals("title"))
+         if(secondTag.equalsIgnoreCase("title"))
             id = mol.GetTitle();
          else
             id = oechem.OEGetSDData(mol, secondTag);
