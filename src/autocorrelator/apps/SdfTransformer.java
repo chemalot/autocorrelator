@@ -750,7 +750,7 @@ class MyUniMolecularTransform implements MyTransform
    private String molSmi;
 
    MyUniMolecularTransform(String smirks, String name)
-   {  this.trans = new OEUniMolecularRxn(smirks);
+   {  this.trans = new OEUniMolecularRxn(smirks, true);
       if( ! trans.IsValid() )
          throw new IllegalArgumentException(name);
       this.name = name;
