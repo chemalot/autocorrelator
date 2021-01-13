@@ -135,6 +135,7 @@ public class SdfSorter
 
          if( --maxOut <= 0 ) break;
       }
+      ofs.close();
    }
 }
 

@@ -50,7 +50,7 @@ public class SdfTransformer
          "              or a smirks\n" +
          "              or 'neutralize' which applies a set of neutralizing transforms\n" +
          "  -scaffold . String containing SPACE separated 'scaffolds'. Each 'scaffold' can be:\n" +
-         "              a newline separeated txt file containing smarts' 'name \n" +
+         "              a newline separeated .txt file containing smarts' 'name \n" +
          "                  with smarts containing [U+n] atoms marking attachement points\n" +
          "              or a mol file containing MDL query molecules with R groups marking attachement points\n" +
          "              or a smarts with [U+n] atoms marking attachement points\n" +
@@ -300,7 +300,7 @@ public class SdfTransformer
    private static void parseScaffold(String smarts, List<MyTransform> reaList )
    {
       if( ! smarts.contains("[U") )
-         throw new Error("Scaffold Smarts must contain at least one [U+]");
+         throw new Error(String.format("Scaffold Smarts (%s) must contain at least one [U+]", smarts));
 
 
       MyTransform tr = transFormFactory.create(scaffoldToSmirks(smarts), "");
@@ -750,7 +750,7 @@ class MyUniMolecularTransform implements MyTransform
    private String molSmi;
 
    MyUniMolecularTransform(String smirks, String name)
-   {  this.trans = new OEUniMolecularRxn(smirks);
+   {  this.trans = new OEUniMolecularRxn(smirks, true);
       if( ! trans.IsValid() )
          throw new IllegalArgumentException(name);
       this.name = name;

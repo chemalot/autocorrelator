@@ -78,6 +78,7 @@ public class Tab2Sdf {
             i++;
             mol.Clear();
          }
+         ofs.close();
       }
       catch (Exception e) 
       {
