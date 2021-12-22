@@ -34,6 +34,7 @@ public class SdfTagTool
    private static final String EXPLAIN=
          "sdfTagTool -in fn -out fn\n" +
          "  -addSmi\n"+
+         "  -cleanTagRepeats\n"+
          "  -addAll fn\n" +
          "  -add tag=const|tag2=const2\n"+
          "  -append tag1=tag2|tag3=tag4\n"+
@@ -79,6 +80,7 @@ public class SdfTagTool
          "\t            oTag={it1}/{it2}/{it3} : create out-tag (oTag) combining values from in-tags (it?).\n"+
          "\t            For numeric fields the in-tags can contain roundign information e.g. {tag:r3}\n"+
          "\t-formatNullReplacement specify the string replacing an empty value in -format (def=_)\n"+
+         "\t-cleanTagRepeats Make tags within each record unique, warn if values differ\n"+
          "\t-reorder ...reorder tags, unspecified tags are appened at the end, in their original order.\n"+
       "   All '|' seperated options can also be entered by a newline separated file:\n"+
       "     specify filename.txt (.txt is requires) instead of a '|' separated value\n" +
@@ -88,7 +90,7 @@ public class SdfTagTool
    public static void main(String[] args)
    throws IOException
    {  CommandLineParser cParser;
-      String[] modes    = { "-addSmi", "-addCounter", "-InChiKey"};
+      String[] modes    = { "-addSmi", "-addCounter", "-InChiKey", "-cleanTagRepeats"};
       String[] parms    = {"-remove", "-removeRE", "-title",  "-in", "-out", "-rename", "-prefix",
                            "-add",    "-addAll", "-keep", "-copy", "-append", "-reorder",
                            "-keepNumeric", "-rmDupTag", "-rmRepeatTag", "-markAsRepeatTag", "-transform", "-IUPAC",
@@ -144,6 +146,7 @@ public class SdfTagTool
 
       boolean addSmiles  = cParser.wasGiven("-addSmi");
       boolean addCounter = cParser.wasGiven("-addCounter");
+      boolean cleanDuplicates = cParser.wasGiven("-cleanTagRepeats");
       String counterTag  = cParser.getValue("-counterTag");
       if( counterTag == null ) counterTag = "counter";
       int count = 0;
@@ -512,6 +515,10 @@ public class SdfTagTool
                oechem.OESetSDData(mol, formatOutTag, sb.toString());
          }
 
+         // cleanTagRepeats
+         if(cleanDuplicates) cleanTagRepeats(mol);
+         
+         
          // reorder
          oechem.OEClearSDData(tmpMol);
          oechem.OECopySDData(tmpMol, mol); // saved SD data in a tmpMol
@@ -538,6 +545,29 @@ public class SdfTagTool
       ofs.close();
    }
 
+   /** look for tags with same name, drop second occurance */
+   protected static void cleanTagRepeats(OEGraphMol mol)
+   {  Map<String,String> sdData = new LinkedHashMap<String, String>();
+      OESDDataIter sdIt = oechem.OEGetSDDataPairs(mol);
+      while( sdIt.hasNext() )
+      {  OESDDataPair pair = sdIt.next();
+         String key = pair.GetTag();
+         String val = pair.GetValue();
+         
+         if( sdData.containsKey(key) )
+         {  if( !sdData.get(key).equals(val) )
+               System.err.printf("Molecule cotains multipe tags '%s' with differing values '%s' =! '%s'\n");
+         }else
+         {  sdData.put(key, val);
+         }
+      }
+      oechem.OEClearSDData(mol);
+      
+      for( Entry<String, String> e : sdData.entrySet())
+         oechem.OESetSDData(mol, e.getKey(), e.getValue());
+   }
+
+   
    private static Map<String,String> getAllTags(String fileName)
    {  Map<String,String> tags = new HashMap<String, String>();
 
