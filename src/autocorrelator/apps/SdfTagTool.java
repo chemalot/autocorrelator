@@ -556,7 +556,8 @@ public class SdfTagTool
          
          if( sdData.containsKey(key) )
          {  if( !sdData.get(key).equals(val) )
-               System.err.printf("Molecule cotains multipe tags '%s' with differing values '%s' =! '%s'\n");
+               System.err.printf("Molecule contains multiple '%s' tags with differing values: '%s' =! '%s'\n",
+                                 key, sdData.get(key), val );
          }else
          {  sdData.put(key, val);
          }
