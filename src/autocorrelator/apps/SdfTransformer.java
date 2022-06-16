@@ -496,7 +496,7 @@ public class SdfTransformer
 
          cPos += at.length();
 
-         if( cPos >= scaffoldSma.length() ) return "";
+         if( cPos >= scaffoldSma.length() ) break;
 
          String oth = getNextOther(scaffoldSma,cPos);
          left .append(oth);
@@ -752,7 +752,7 @@ class MyUniMolecularTransform implements MyTransform
    MyUniMolecularTransform(String smirks, String name)
    {  this.trans = new OEUniMolecularRxn(smirks, true);
       if( ! trans.IsValid() )
-         throw new IllegalArgumentException(name);
+         throw new IllegalArgumentException(name + " " + smirks);
       this.name = name;
    }
 
